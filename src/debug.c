@@ -30,6 +30,12 @@ static uint32_t constantInstruction(const char* name, const Chunk* chunk,
 uint32_t disassembleInstruction(const Chunk* chunk, const uint32_t offset) {
   printf("%04d ", offset);
 
+  if (offset > 0 && chunk->lines[offset] == chunk->lines[offset - 1]) {
+    printf("   | ");
+  } else {
+    printf("%4d ", chunk->lines[offset]);
+  }
+
   uint8_t instruction = chunk->code[offset];
 
   switch (instruction) {
