@@ -1,0 +1,6 @@
+# Configuration files
+.vscode/
+.clang-format
+
+# Build directory
+build/
