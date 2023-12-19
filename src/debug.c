@@ -5,19 +5,19 @@
 void disassembleChunk(const Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
 
-  for (uint32_t offset = 0; offset < chunk->count;) {
+  for (size_t offset = 0; offset < chunk->count;) {
     offset = disassembleInstruction(chunk, offset);
   }
 }
 
-static uint32_t simpleInstruction(const char* name, const uint32_t offset) {
+static size_t simpleInstruction(const char* name, const size_t offset) {
   printf("%s\n", name);
 
   return offset + 1;
 }
 
-static uint32_t constantInstruction(const char* name, const Chunk* chunk,
-                                    const uint32_t offset) {
+static size_t constantInstruction(const char* name, const Chunk* chunk,
+                                    const size_t offset) {
   uint8_t constantOffset = chunk->code[offset + 1];
   printf("%-16s %4d '", name, constantOffset);
 
@@ -27,13 +27,14 @@ static uint32_t constantInstruction(const char* name, const Chunk* chunk,
   return offset + 2;
 }
 
-uint32_t disassembleInstruction(const Chunk* chunk, const uint32_t offset) {
-  printf("%04d ", offset);
+size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
+  printf("%04ld ", offset);
 
-  if (offset > 0 && chunk->lines[offset] == chunk->lines[offset - 1]) {
+  uint32_t line = getLine(chunk, offset);
+  if (offset > 0 && line == getLine(chunk, offset - 1)) {
     printf("   | ");
   } else {
-    printf("%4d ", chunk->lines[offset]);
+    printf("%4d ", line);
   }
 
   uint8_t instruction = chunk->code[offset];

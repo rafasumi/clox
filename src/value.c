@@ -10,7 +10,7 @@ void initValueArray(ValueArray* array) {
 
 void writeValueArray(ValueArray* array, const Value value) {
   if (array->capacity <= array->count) {
-    uint32_t oldCapacity = array->capacity;
+    size_t oldCapacity = array->capacity;
     array->capacity = GROW_CAPACITY(oldCapacity);
     array->values =
         GROW_ARRAY(Value, array->values, oldCapacity, array->capacity);
