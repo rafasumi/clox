@@ -60,7 +60,8 @@ static InterpretResult run() {
       break;
     }
     case OP_NEGATE:
-      push(-pop());
+      Value* target = vm.stackTop - 1;
+      *target = -(*target);
       break;
     case OP_ADD:
       BINARY_OP(+);
