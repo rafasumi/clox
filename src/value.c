@@ -1,3 +1,7 @@
+/*! \file value.c
+    \brief Definitions of function from value.h
+*/
+
 #include "value.h"
 #include "memory.h"
 #include <stdio.h>
@@ -25,6 +29,6 @@ void freeValueArray(ValueArray* array) {
   initValueArray(array);
 }
 
-void printValue(Value value) {
+void printValue(const Value value) {
   printf("%g", value);
 }

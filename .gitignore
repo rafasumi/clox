@@ -1,6 +1,7 @@
 # Configuration files
 .vscode/
 .clang-format
+Doxyfile
 
 # Build directory
 build/

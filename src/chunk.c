@@ -1,3 +1,7 @@
+/*! \file chunk.c
+    \brief Definitions of function from chunk.h
+*/
+
 #include "chunk.h"
 #include "memory.h"
 #include <stdlib.h>
@@ -50,7 +54,7 @@ void writeChunk(Chunk* chunk, const uint8_t byte, const uint32_t line) {
   lineInfo->line = line;
 }
 
-uint32_t getLine(const Chunk* chunk, size_t instructionOffset) {
+uint32_t getLine(const Chunk* chunk, const size_t instructionOffset) {
   size_t start = 0;
   size_t end = chunk->linesCount - 1;
 

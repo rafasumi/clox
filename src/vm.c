@@ -1,3 +1,7 @@
+/*! \file vm.c
+    \brief Definitions of function from vm.h
+*/
+
 #include "vm.h"
 #include "common.h"
 #include "debug.h"
@@ -5,13 +9,16 @@
 
 VM vm;
 
+/**
+ * \brief Resets the value stack by moving the stack pointer to its start.
+ */
 static void resetStack() { vm.stackTop = vm.stack; }
 
 void initVM() { resetStack(); }
 
 void freeVM() {}
 
-void push(Value value) {
+void push(const Value value) {
   *vm.stackTop = value;
   vm.stackTop++;
 }
@@ -21,12 +28,26 @@ Value pop() {
   return *vm.stackTop;
 }
 
+/**
+ * \brief Helper function that runs the instructions in the VM.
+ *
+ * \return Result of the interpretation process
+ */
 static InterpretResult run() {
+// Read a single bytecode from the VM and updates the instruction pointer
 #define READ_BYTE() (*(vm.ip++))
+
+// Read a constant from the chunk based on the 8-bit offset at the bytecode
+// array
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+
+// Read a constant from the chunk based on the 24-bit offset at the bytecode
+// array
 #define READ_CONSTANT_LONG()                                                   \
   (vm.chunk->constants                                                         \
        .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
+
+// Apply a binary operation based on the two next values at stack
 #define BINARY_OP(op)                                                          \
   do {                                                                         \
     double right = pop();                                                      \
@@ -35,6 +56,7 @@ static InterpretResult run() {
   } while (false)
 
   while (true) {
+
 #ifdef DEBUG
     printf("          ");
     for (Value* slot = vm.stack; slot < vm.stackTop; ++slot) {
