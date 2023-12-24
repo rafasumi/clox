@@ -4,5 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+
+#define eprintf(...) fprintf(stderr, __VA_ARGS__)
 
 #endif

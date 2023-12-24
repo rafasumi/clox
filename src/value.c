@@ -4,7 +4,6 @@
 
 #include "value.h"
 #include "memory.h"
-#include <stdio.h>
 
 void initValueArray(ValueArray* array) {
   array->count = 0;

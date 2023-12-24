@@ -47,13 +47,13 @@ void initVM();
 void freeVM();
 
 /**
- * \brief Interprets the instructions in a chunk of bytecode.
+ * \brief Interprets a given Lox source file.
  * 
- * \param chunk Chunk of bytecode instructions to be interpreted
+ * \param source Source code to be interpreted
  * 
  * \return The result of the interpretation process
  */
-InterpretResult interpret(Chunk* chunk);
+InterpretResult interpret(const char* source);
 
 /**
  * \brief Pushes a value to the top of the stack.

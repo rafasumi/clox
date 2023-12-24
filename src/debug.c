@@ -4,7 +4,6 @@
 
 #include "debug.h"
 #include "value.h"
-#include <stdio.h>
 
 void disassembleChunk(const Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
