@@ -1,6 +1,9 @@
+/*! \file debug.c
+    \brief Definitions of functions from debug.h
+*/
+
 #include "debug.h"
 #include "value.h"
-#include <stdio.h>
 
 void disassembleChunk(const Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
@@ -10,14 +13,32 @@ void disassembleChunk(const Chunk* chunk, const char* name) {
   }
 }
 
+/**
+ * \brief Display a simple instruction at a given offset. The instruction must
+ * have no operands.
+ *
+ * \param name Name of the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t simpleInstruction(const char* name, const size_t offset) {
   printf("%s\n", name);
 
   return offset + 1;
 }
 
+/**
+ * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
+ * has one 8-bit operand
+ *
+ * \param name Name of the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t constantInstruction(const char* name, const Chunk* chunk,
-                                    const size_t offset) {
+                                  const size_t offset) {
   uint8_t constantOffset = chunk->code[offset + 1];
   printf("%-16s %4d '", name, constantOffset);
 
@@ -27,9 +48,20 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
   return offset + 2;
 }
 
+/**
+ * \brief Display an OP_CONSTANT_LONG instruction at a given offset. This
+ * instruction has three 8-bit operands.
+ *
+ * \param name Name of the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t constantLongInstruction(const char* name, const Chunk* chunk,
-                                    const size_t offset) {
-  uint32_t constantOffset = (chunk->code[offset + 3] << 16) | (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
+                                      const size_t offset) {
+  uint32_t constantOffset = (chunk->code[offset + 3] << 16) |
+                            (chunk->code[offset + 2] << 8) |
+                            chunk->code[offset + 1];
 
   printf("%-16s %4d '", name, constantOffset);
 

@@ -1,44 +1,109 @@
+/*! \file chunk.h
+    \brief Functions and data types for manipulating chunks of bytecode.
+*/
+
 #ifndef CLOX_CHUNK_H
 #define CLOX_CHUNK_H
 
 #include "common.h"
 #include "value.h"
 
+/**
+ * \enum OpCode
+ * \brief Enum type for all Opcodes available in clox's instruction set.
+ */
 typedef enum {
-  OP_CONSTANT,
-  OP_CONSTANT_LONG,
-  OP_NEGATE,
-  OP_ADD,
-  OP_SUBTRACT,
-  OP_MULTIPLY,
-  OP_DIVIDE,
-  OP_RETURN
+  OP_CONSTANT, /**< Loads a constant value with an 8-bit offset to the stack */
+  OP_CONSTANT_LONG, /**< Loads a constant value with a 24-bit offset to the
+                       stack */
+  OP_NEGATE,        /**< Negates the value at the top of the stack */
+  OP_ADD,           /**< Adds the next two values in the stack */
+  OP_SUBTRACT,      /**< Subtracts the next two values in the stack */
+  OP_MULTIPLY,      /**< Multiplies the next two values in the stack */
+  OP_DIVIDE,        /**< Divides the next two values in the stack */
+  OP_RETURN         /**< Returns from the current function */
 } OpCode;
 
+/**
+ * \struct LineInfo
+ * \brief Strucure that contains line metadata for a given bytecode. This
+ * strucure helps to save memory when many bytecodes are in the same line.
+ */
 typedef struct {
-  size_t startOffset;
-  uint32_t line;
+  size_t startOffset; /**< First index of a bytecode with this line in the
+                         chunk's array */
+  uint32_t line;      /**< Line number */
 } LineInfo;
 
+/**
+ * \struct Chunk
+ * \brief Structure that contains a chunk of bytecode and its metadata.
+ */
 typedef struct {
-  size_t count;
-  size_t capacity;
-  uint8_t* code;
+  size_t count;    /**< Number of bytecodes currently in the array */
+  size_t capacity; /**< Current capacity of the bytecode array */
+  uint8_t* code;   /**< Pointer to the bytecode array */
 
-  size_t linesCount;
-  size_t linesCapacity;
-  LineInfo* lines;
+  size_t linesCount; /**< Number of line information variables currently in the
+                        array */
+  size_t linesCapacity; /**< Current capacity of the line information array */
+  LineInfo* lines;      /**< Pointer to the line information array */
 
-  ValueArray constants;
+  ValueArray constants; /**< Array of constant values used as operands */
 } Chunk;
 
+/**
+ * \brief Initializes a chunk.
+ *
+ * \param chunk Chunk to be initialized
+ */
 void initChunk(Chunk* chunk);
+
+/**
+ * \brief Frees the resources of a given chunk.
+ *
+ * \param chunk Chunk to be freed
+ */
 void freeChunk(Chunk* chunk);
+
+/**
+ * \brief Adds a bytecode to a given chunk.
+ *
+ * \param chunk Chunk where the bytecode will be inserted
+ * \param byte Bytecode instruction that will be added to \p chunk
+ * \param line Line where \p byte appears in the source code
+ */
 void writeChunk(Chunk* chunk, const uint8_t byte, const uint32_t line);
 
-uint32_t getLine(const Chunk* chunk, size_t instructionOffset);
+/**
+ * \brief Gets the line number of a given bytecode based on its offset in the
+ * bytecode array.
+ *
+ * \param chunk Chunk that contains the bytecode
+ * \param instructionOffset Offset of the bytecode in \p chunk's bytecode array
+ *
+ * \return Line number of the bytecode
+ */
+uint32_t getLine(const Chunk* chunk, const size_t instructionOffset);
 
+/**
+ * \brief Wrapper function that adds a constant value to a chunk's constants
+ * array and also adds the appropriate bytecode to the chunk
+ *
+ * \param chunk Chunk where the constant will be added
+ * \param value The constant value that will be added
+ * \param line Line where \p value appears in the source code
+ */
 void writeConstant(Chunk* chunk, const Value value, const uint32_t line);
+
+/**
+ * \brief Adds a constant value to the constants array of a given chunk.
+ *
+ * \param chunk Chunk where the constant will be added
+ * \param value The constant value that will be added
+ *
+ * \return The offset of the constant in the chunk's constants array
+ */
 size_t addConstant(Chunk* chunk, const Value value);
 
 #endif

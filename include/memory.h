@@ -1,17 +1,42 @@
+/*! \file memory.h
+    \brief Functions and macros for memory management
+*/
+
 #ifndef CLOX_MEMORY_H
 #define CLOX_MEMORY_H
 
 #include "common.h"
 
+/**
+ * \def GROW_CAPACITY(capacity)
+ * \brief Determines the next capacity for an array given its current capacity
+ */
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity)*2)
 
+/**
+ * \def GROW_ARRAY(type, pointer, oldCount, newCount)
+ * \brief Wrapper to grow an array of a specified type to have a new size
+ */
 #define GROW_ARRAY(type, pointer, oldCount, newCount)                          \
   (type*)reallocate(pointer, sizeof(type) * (oldCount),                        \
                     sizeof(type) * (newCount))
 
+/**
+ * \def FREE_ARRAY(type, pointer, oldCount)
+ * \brief Wrapper to free an existing an array
+ */
 #define FREE_ARRAY(type, pointer, oldCount)                                    \
   reallocate(pointer, sizeof(type) * (oldCount), 0)
 
-void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+/**
+ * \brief Reallocates a given memory location to have a given size
+ *
+ * \param pointer Pointer to the memory location
+ * \param oldSize Previous size of the memory location
+ * \param newSize Size of the reallocated memory location
+ *
+ * \return Pointer to the newly reallocated memory location
+ */
+void* reallocate(void* pointer, const size_t oldSize, const size_t newSize);
 
 #endif
