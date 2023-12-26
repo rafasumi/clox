@@ -1,12 +1,20 @@
+/*! \file scanner.c
+    \brief Definitions of functions from scanner.h
+*/
+
 #include <string.h>
 
 #include "common.h"
 #include "scanner.h"
 
+/**
+ * \struct Scanner
+ * \brief Strucure that represents clox's scanner and its necessary attributes.
+ */
 typedef struct {
-  const char* start;
-  const char* current;
-  uint32_t line;
+  const char* start; /**< Pointer to the start of the next lexeme in the code */
+  const char* current; /**< Pointer to the current character being scanned */
+  uint32_t line;       /**< Current line in the source code being scanned */
 } Scanner;
 
 Scanner scanner;
@@ -17,8 +25,21 @@ void initScanner(const char* source) {
   scanner.line = 1;
 }
 
+/**
+ * \brief Determines if the scanner is at the end of the source code.
+ *
+ * \return Boolean value to indicate if the scanner is at the end
+ */
 static bool isAtEnd() { return *scanner.current == '\0'; }
 
+/**
+ * \brief Creates a Token with a given type based on the current state of the
+ * scanner.
+ *
+ * \param type The type of the Token that will be created
+ *
+ * \return The created Token
+ */
 static Token makeToken(TokenType type) {
   Token token;
   token.type = type;
@@ -29,6 +50,14 @@ static Token makeToken(TokenType type) {
   return token;
 }
 
+/**
+ * \brief Creates a Token of the TOKEN_ERROR type with a given error message.
+ * The error message is stored as the token's lexeme.
+ *
+ * \param message Error message to be stored in the token.
+ *
+ * \return The created Token
+ */
 static Token errorToken(const char* message) {
   Token token;
   token.type = TOKEN_ERROR;
@@ -39,12 +68,26 @@ static Token errorToken(const char* message) {
   return token;
 }
 
+/**
+ * \brief Consumes the next character in the source code and updates the
+ * "current" pointer.
+ *
+ * \return The next character in the source code
+ */
 static char advance() {
   scanner.current++;
 
   return scanner.current[-1];
 }
 
+/**
+ * \brief Conditionally consumes the next character in the source code if it is
+ * equal to a given expected character.
+ *
+ * \param expected The expected character
+ *
+ * \return Boolean value that indicates if the character was consumed
+ */
 static bool match(char expected) {
   if (isAtEnd())
     return false;
@@ -57,8 +100,19 @@ static bool match(char expected) {
   return true;
 }
 
+/**
+ * \brief Returns the next character in the source code without consuming it.
+ *
+ * \return The next character in the source code
+ */
 static char peek() { return *scanner.current; }
 
+/**
+ * \brief Returns the character that is two positions ahead without consuming
+ * them.
+ *
+ * \return The character two positions ahead
+ */
 static char peekNext() {
   if (isAtEnd())
     return '\0';
@@ -66,6 +120,10 @@ static char peekNext() {
   return scanner.current[1];
 }
 
+/**
+ * \brief Skips whitespaces and line breaks in the source code. Also updates the
+ * current line in the Scanner.
+ */
 static void skipWhitespace() {
   while (true) {
     char c = peek();
@@ -95,6 +153,12 @@ static void skipWhitespace() {
   }
 }
 
+/**
+ * \brief Creates a TOKEN_STRING Token if there is a correctly terminated string
+ * in the source code. Otherwise, returns a TOKEN_ERROR Token.
+ *
+ * \return The created Token
+ */
 static Token string() {
   while (peek() != '"' && !isAtEnd()) {
     if (peek() == '\n')
@@ -112,12 +176,33 @@ static Token string() {
   return makeToken(TOKEN_STRING);
 }
 
+/**
+ * \brief Determines if a given character is a digit.
+ *
+ * \param c Character to be considered
+ *
+ * \return Boolean value
+ */
 static bool isDigit(char c) { return c >= '0' && c <= '9'; }
 
+/**
+ * \brief Determines if a given character is a either alphabetic or underscore.
+ * In other words, determines if the character is appropriate for use in
+ * identifiers.
+ *
+ * \param c Character to be considered
+ *
+ * \return Boolean value
+ */
 static bool isAlpha(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
+/**
+ * \brief Creates a TOKEN_NUMBER Token by consuming digits in the source code.
+ *
+ * \return The created Token
+ */
 static Token number() {
   while (isDigit(peek()))
     advance();
@@ -134,6 +219,19 @@ static Token number() {
   return makeToken(TOKEN_NUMBER);
 }
 
+/**
+ * \brief Checks if a given substring from the source code is equal to a
+ * specified Lox keyword. If so, returns the appropriate TokenType. Otherwise
+ * returns the TOKEN_IDENTIFIER type.
+ *
+ * \param start Index of the start of the substring
+ * \param length Length of the substring
+ * \param rest String that contains the part of the keyword that hasn't been
+ * checked in the substring
+ * \param type The appropriate TokenType for the keyword
+ *
+ * \return The TokenType for the substring
+ */
 static TokenType checkKeyword(const size_t start, const size_t length,
                               const char* rest, TokenType type) {
   if ((size_t)(scanner.current - scanner.start) == start + length &&
@@ -144,6 +242,12 @@ static TokenType checkKeyword(const size_t start, const size_t length,
   return TOKEN_IDENTIFIER;
 }
 
+/**
+ * \brief Returns the appropriate type for an identifier Token in the source
+ * code. This function is able to determine if the identifier is a Lox keyword.
+ *
+ * \return The TokenType for the identifier
+ */
 static TokenType identifierType() {
   switch (scanner.start[0]) {
   case 'a':
@@ -197,6 +301,11 @@ static TokenType identifierType() {
   return TOKEN_IDENTIFIER;
 }
 
+/**
+ * \brief Creates an identifier Token with the appropriate TokenType.
+ *
+ * \return The created Token.
+ */
 static Token identifier() {
   while (isAlpha(peek()) || isDigit(peek()))
     advance();

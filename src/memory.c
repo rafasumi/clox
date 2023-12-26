@@ -1,5 +1,5 @@
 /*! \file memory.c
-    \brief Definitions of function from memory.h
+    \brief Definitions of functions from memory.h
 */
 
 #include "memory.h"

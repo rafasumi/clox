@@ -1,5 +1,5 @@
 /*! \file debug.c
-    \brief Definitions of function from debug.h
+    \brief Definitions of functions from debug.h
 */
 
 #include "debug.h"

@@ -1,5 +1,5 @@
 /*! \file value.c
-    \brief Definitions of function from value.h
+    \brief Definitions of functions from value.h
 */
 
 #include "value.h"

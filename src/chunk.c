@@ -1,5 +1,5 @@
 /*! \file chunk.c
-    \brief Definitions of function from chunk.h
+    \brief Definitions of functions from chunk.h
 */
 
 #include "chunk.h"

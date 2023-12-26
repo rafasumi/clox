@@ -1,3 +1,7 @@
+/*! \file main.c
+    \brief File with the interpreter's main function and its auxiliary functions
+*/
+
 #include "chunk.h"
 #include "common.h"
 #include "debug.h"
@@ -5,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * \brief Creates a REPL session
+ */
 static void repl() {
   char line[1024];
 
@@ -20,6 +27,14 @@ static void repl() {
   }
 }
 
+/**
+ * \brief Reads the file with Lox source code at a given path and copies it to
+ * memory.
+ *
+ * \param path Path to the file
+ *
+ * \return Pointer to the string with the source code.
+ */
 static char* readFile(const char* path) {
   FILE* file = fopen(path, "rb");
   if (file == NULL) {
@@ -50,6 +65,11 @@ static char* readFile(const char* path) {
   return buffer;
 }
 
+/**
+ * \brief Runs the interpreter for the source code at a given file.
+ *
+ * \param path Path to the file
+ */
 static void runFile(const char* path) {
   char* source = readFile(path);
   InterpretResult result = interpret(source);
@@ -59,7 +79,7 @@ static void runFile(const char* path) {
     exit(65);
 
   if (result == INTERPRET_RUNTIME_ERROR)
-    exit(70); 
+    exit(70);
 }
 
 int main(int argc, char const* argv[]) {

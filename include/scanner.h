@@ -1,6 +1,14 @@
+/*! \file scanner.h
+    \brief Functions and datatypes used by clox's scanner.
+*/
+
 #ifndef CLOX_SCANNER_H
 #define CLOX_SCANNER_H
 
+/**
+ * \enum TokenType
+ * \brief Enum type for all types of Token in the Lox language.
+ */
 typedef enum {
   // Single-character tokens.
   TOKEN_LEFT_PAREN,
@@ -49,14 +57,29 @@ typedef enum {
   TOKEN_EOF
 } TokenType;
 
+/**
+ * \struct Token
+ * \brief Strucure used to represent a token in the source code.
+ */
 typedef struct {
-  TokenType type;
-  const char* start;
-  size_t length;
-  uint32_t line;
+  TokenType type;    /**< The type of the token */
+  const char* start; /**< Pointer to the start of the token in the code */
+  size_t length;     /**< Length of the token */
+  uint32_t line;     /**< Line where the token appears in the source code */
 } Token;
 
+/**
+ * \brief Initializes clox's scanner.
+ *
+ * \param source Pointer to the source code's string in memory.
+ */
 void initScanner(const char* source);
+
+/**
+ * \brief Scans the next available token in the source code.
+ *
+ * \return The scanned token.
+ */
 Token scanToken();
 
 #endif

@@ -1,5 +1,5 @@
 /*! \file vm.c
-    \brief Definitions of function from vm.h
+    \brief Definitions of functions from vm.h
 */
 
 #include "vm.h"
