@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define UINT24_MAX (UINT32_MAX >> 8)
+
 /**
  * \def eprintf(...)
  * \brief Wrapper macro to print something to stderr.

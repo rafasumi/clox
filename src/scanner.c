@@ -30,7 +30,9 @@ void initScanner(const char* source) {
  *
  * \return Boolean value to indicate if the scanner is at the end
  */
-static bool isAtEnd() { return *scanner.current == '\0'; }
+static bool isAtEnd() {
+  return *scanner.current == '\0';
+}
 
 /**
  * \brief Creates a Token with a given type based on the current state of the
@@ -40,7 +42,7 @@ static bool isAtEnd() { return *scanner.current == '\0'; }
  *
  * \return The created Token
  */
-static Token makeToken(TokenType type) {
+static Token makeToken(const TokenType type) {
   Token token;
   token.type = type;
   token.start = scanner.start;
@@ -88,7 +90,7 @@ static char advance() {
  *
  * \return Boolean value that indicates if the character was consumed
  */
-static bool match(char expected) {
+static bool match(const char expected) {
   if (isAtEnd())
     return false;
 
@@ -105,7 +107,9 @@ static bool match(char expected) {
  *
  * \return The next character in the source code
  */
-static char peek() { return *scanner.current; }
+static char peek() {
+  return *scanner.current;
+}
 
 /**
  * \brief Returns the character that is two positions ahead without consuming
@@ -183,7 +187,9 @@ static Token string() {
  *
  * \return Boolean value
  */
-static bool isDigit(char c) { return c >= '0' && c <= '9'; }
+static bool isDigit(const char c) {
+  return c >= '0' && c <= '9';
+}
 
 /**
  * \brief Determines if a given character is a either alphabetic or underscore.
@@ -194,7 +200,7 @@ static bool isDigit(char c) { return c >= '0' && c <= '9'; }
  *
  * \return Boolean value
  */
-static bool isAlpha(char c) {
+static bool isAlpha(const char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 

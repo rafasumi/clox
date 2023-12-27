@@ -73,20 +73,6 @@ uint32_t getLine(const Chunk* chunk, const size_t instructionOffset) {
   }
 }
 
-void writeConstant(Chunk* chunk, const Value value, const uint32_t line) {
-  size_t offset = addConstant(chunk, value);
-
-  if (offset <= UINT8_MAX) {
-    writeChunk(chunk, OP_CONSTANT, line);
-    writeChunk(chunk, (uint8_t)offset, line);
-  } else {
-    writeChunk(chunk, OP_CONSTANT_LONG, line);
-    writeChunk(chunk, (uint8_t)(offset & UINT8_MAX), line);
-    writeChunk(chunk, (uint8_t)((offset >> 8) & UINT8_MAX), line);
-    writeChunk(chunk, (uint8_t)((offset >> 16) & UINT8_MAX), line);
-  }
-}
-
 size_t addConstant(Chunk* chunk, const Value value) {
   writeValueArray(&chunk->constants, value);
 
