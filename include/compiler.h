@@ -7,6 +7,15 @@
 
 #include "vm.h"
 
+/**
+ * \brief Compiles a string of source code into a chunk of bytecode to be
+ * executed by the clox virtual machine
+ *
+ * \param source Pointer to the source code
+ * \param chunk Pointer to the Chunk where the bytecodes must be added
+ *
+ * \return Boolean value that indicates if the compiling process was successful
+ */
 bool compile(const char* source, Chunk* chunk);
 
 #endif
