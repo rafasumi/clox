@@ -5,16 +5,23 @@
 #include "vm.h"
 #include "common.h"
 #include "compiler.h"
+
+#ifdef DEBUG
 #include "debug.h"
+#endif
 
 VM vm;
 
 /**
  * \brief Resets the value stack by moving the stack pointer to its start.
  */
-static void resetStack() { vm.stackTop = vm.stack; }
+static void resetStack() {
+  vm.stackTop = vm.stack;
+}
 
-void initVM() { resetStack(); }
+void initVM() {
+  resetStack();
+}
 
 void freeVM() {}
 
@@ -54,6 +61,11 @@ static InterpretResult run() {
     double left = pop();                                                       \
     push(left op right);                                                       \
   } while (false)
+
+
+#ifdef DEBUG
+    printf("\n=== execution trace ===");
+#endif
 
   while (true) {
 
@@ -113,6 +125,19 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char* source) {
-  compile(source);
-  return INTERPRET_OK;
+  Chunk chunk;
+  initChunk(&chunk);
+
+  if (!compile(source, &chunk)) {
+    freeChunk(&chunk);
+    return INTERPRET_COMPILE_ERROR;
+  }
+
+  vm.chunk = &chunk;
+  vm.ip = vm.chunk->code;
+
+  InterpretResult result = run();
+
+  freeChunk(&chunk);
+  return result;
 }

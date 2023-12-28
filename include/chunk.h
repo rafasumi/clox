@@ -87,16 +87,6 @@ void writeChunk(Chunk* chunk, const uint8_t byte, const uint32_t line);
 uint32_t getLine(const Chunk* chunk, const size_t instructionOffset);
 
 /**
- * \brief Wrapper function that adds a constant value to a chunk's constants
- * array and also adds the appropriate bytecode to the chunk
- *
- * \param chunk Chunk where the constant will be added
- * \param value The constant value that will be added
- * \param line Line where \p value appears in the source code
- */
-void writeConstant(Chunk* chunk, const Value value, const uint32_t line);
-
-/**
  * \brief Adds a constant value to the constants array of a given chunk.
  *
  * \param chunk Chunk where the constant will be added
