@@ -280,8 +280,8 @@ static void grouping() {
  *
  */
 static void number() {
-  Value value = strtod(parser.previous.start, NULL);
-  emitConstant(value);
+  double value = strtod(parser.previous.start, NULL);
+  emitConstant(NUMBER_VAL(value));
 }
 
 /**
@@ -354,7 +354,7 @@ ParseRule rules[] = {
  *
  * Based on the "rules" table, the function is able to determine if a token is
  * used as a prefix or as an infix within an expression.
- * 
+ *
  * \param precedence The lower bound for the precedence level of the expressions
  * that will be parsed
  *
@@ -378,7 +378,7 @@ static void parsePrecedence(Precedence precedence) {
 
 /**
  * \brief Obtains the parse rules for a token of a given type
- * 
+ *
  * \param type Token type whose rules must be fetched
  *
  */

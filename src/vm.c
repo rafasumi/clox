@@ -10,6 +10,8 @@
 #include "debug.h"
 #endif
 
+#include <stdarg.h>
+
 VM vm;
 
 /**
@@ -17,6 +19,19 @@ VM vm;
  */
 static void resetStack() {
   vm.stackTop = vm.stack;
+}
+
+static void runtimeError(const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  size_t instruction = vm.ip - vm.chunk->code - 1;
+  int line = getLine(vm.chunk, instruction);
+  eprintf("[line %d] in script\n", line);
+  resetStack();
 }
 
 void initVM() {
@@ -33,6 +48,10 @@ void push(const Value value) {
 Value pop() {
   vm.stackTop--;
   return *vm.stackTop;
+}
+
+static Value peek(int distance) {
+  return vm.stackTop[-1 - distance];
 }
 
 /**
@@ -55,16 +74,19 @@ static InterpretResult run() {
        .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
 
 // Apply a binary operation based on the two next values at stack
-#define BINARY_OP(op)                                                          \
+#define BINARY_OP(valueType, op)                                               \
   do {                                                                         \
-    double right = pop();                                                      \
-    double left = pop();                                                       \
-    push(left op right);                                                       \
+    if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {                          \
+      runtimeError("Operands must be numbers.");                               \
+      return INTERPRET_RUNTIME_ERROR;                                          \
+    }                                                                          \
+    double right = AS_NUMBER(pop());                                           \
+    double left = AS_NUMBER(pop());                                            \
+    push(valueType(left op right));                                            \
   } while (false)
 
-
 #ifdef DEBUG
-    printf("\n=== execution trace ===");
+  printf("\n=== execution trace ===");
 #endif
 
   while (true) {
@@ -94,20 +116,24 @@ static InterpretResult run() {
       break;
     }
     case OP_NEGATE:
-      Value* target = vm.stackTop - 1;
-      *target = -(*target);
+      if (!IS_NUMBER(peek(0))) {
+        runtimeError("Operand must be a number.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      vm.stackTop[-1] = NUMBER_VAL(-AS_NUMBER(vm.stackTop[-1]));
       break;
     case OP_ADD:
-      BINARY_OP(+);
+      BINARY_OP(NUMBER_VAL, +);
       break;
     case OP_SUBTRACT:
-      BINARY_OP(-);
+      BINARY_OP(NUMBER_VAL, -);
       break;
     case OP_MULTIPLY:
-      BINARY_OP(*);
+      BINARY_OP(NUMBER_VAL, *);
       break;
     case OP_DIVIDE:
-      BINARY_OP(/);
+      BINARY_OP(NUMBER_VAL, /);
       break;
     case OP_RETURN:
       printValue(pop());

@@ -29,5 +29,5 @@ void freeValueArray(ValueArray* array) {
 }
 
 void printValue(const Value value) {
-  printf("%g", value);
+  printf("%g", AS_NUMBER(value));
 }
