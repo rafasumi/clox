@@ -16,7 +16,17 @@ typedef enum {
   OP_CONSTANT, /**< Loads a constant value with an 8-bit offset to the stack */
   OP_CONSTANT_LONG, /**< Loads a constant value with a 24-bit offset to the
                        stack */
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
+  OP_NOT,
   OP_NEGATE,        /**< Negates the value at the top of the stack */
+  OP_EQUAL,
+  OP_NOT_EQUAL,
+  OP_GREATER,
+  OP_GTE,
+  OP_LESS,
+  OP_LTE,
   OP_ADD,           /**< Adds the next two values in the stack */
   OP_SUBTRACT,      /**< Subtracts the next two values in the stack */
   OP_MULTIPLY,      /**< Multiplies the next two values in the stack */

@@ -46,6 +46,8 @@ typedef struct {
   Value* values;
 } ValueArray;
 
+bool valuesEqual(const Value a, const Value b);
+
 /**
  * \brief Initializes the resources of a given value array.
  *

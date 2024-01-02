@@ -50,8 +50,12 @@ Value pop() {
   return *vm.stackTop;
 }
 
-static Value peek(int distance) {
+static Value peek(const int32_t distance) {
   return vm.stackTop[-1 - distance];
+}
+
+static bool isFalsey(const Value value) {
+  return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
 /**
@@ -115,6 +119,18 @@ static InterpretResult run() {
       push(constant);
       break;
     }
+    case OP_NIL:
+      push(NIL_VAL);
+      break;
+    case OP_TRUE:
+      push(BOOL_VAL(true));
+      break;
+    case OP_FALSE:
+      push(BOOL_VAL(false));
+      break;
+    case OP_NOT:
+      vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
+      break;
     case OP_NEGATE:
       if (!IS_NUMBER(peek(0))) {
         runtimeError("Operand must be a number.");
@@ -122,6 +138,30 @@ static InterpretResult run() {
       }
 
       vm.stackTop[-1] = NUMBER_VAL(-AS_NUMBER(vm.stackTop[-1]));
+      break;
+    case OP_EQUAL: {
+      Value left = pop();
+      Value right = pop();
+      push(BOOL_VAL(valuesEqual(left, right)));
+      break;
+    }
+    case OP_NOT_EQUAL: {
+      Value left = pop();
+      Value right = pop();
+      push(BOOL_VAL(!valuesEqual(left, right)));
+      break;
+    }
+    case OP_GREATER:
+      BINARY_OP(BOOL_VAL, >);
+      break;
+    case OP_GTE:
+      BINARY_OP(BOOL_VAL, >=);
+      break;
+    case OP_LESS:
+      BINARY_OP(BOOL_VAL, <);
+      break;
+    case OP_LTE:
+      BINARY_OP(BOOL_VAL, <=);
       break;
     case OP_ADD:
       BINARY_OP(NUMBER_VAL, +);
