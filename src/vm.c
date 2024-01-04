@@ -46,9 +46,12 @@ static void runtimeError(const char* format, ...) {
 
 void initVM() {
   resetStack();
+  vm.objects = NULL;
 }
 
-void freeVM() {}
+void freeVM() {
+  freeObjects();
+}
 
 void push(const Value value) {
   *vm.stackTop = value;
@@ -212,7 +215,7 @@ static InterpretResult run() {
       } else if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
         concatenate();
       } else {
-        runtimeError("Operands must be two numbers of two strings.");
+        runtimeError("Operands must be two numbers or two strings.");
         return INTERPRET_RUNTIME_ERROR;
       }
 

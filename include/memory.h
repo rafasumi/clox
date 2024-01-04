@@ -6,8 +6,11 @@
 #define CLOX_MEMORY_H
 
 #include "common.h"
+#include "object.h"
 
 #define ALLOCATE(type, count) (type*)reallocate(NULL, 0, sizeof(type) * count)
+
+#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0);
 
 /**
  * \def GROW_CAPACITY(capacity)
@@ -40,5 +43,6 @@
  * \return Pointer to the newly reallocated memory location
  */
 void* reallocate(void* pointer, const size_t oldSize, const size_t newSize);
+void freeObjects();
 
 #endif

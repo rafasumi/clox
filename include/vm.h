@@ -24,6 +24,7 @@ typedef struct {
   uint8_t* ip; /**< Pointer to the next instruction to be executed */
   Value stack[STACK_MAX]; /**< Value stack used to manage temporary values */
   Value* stackTop; /**< Pointer to the top of the stack */
+  Obj* objects;
 } VM;
 
 /**
@@ -35,6 +36,8 @@ typedef enum {
   INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR
 } InterpretResult;
+
+extern VM vm;
 
 /**
  * \brief Initializes the clox virtual machine.
