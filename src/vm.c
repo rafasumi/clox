@@ -5,12 +5,15 @@
 #include "vm.h"
 #include "common.h"
 #include "compiler.h"
+#include "memory.h"
+#include "object.h"
 
 #ifdef DEBUG
 #include "debug.h"
 #endif
 
 #include <stdarg.h>
+#include <string.h>
 
 VM vm;
 
@@ -78,6 +81,21 @@ static Value peek(const int32_t distance) {
  */
 static bool isFalsey(const Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && AS_BOOL(value) == false);
+}
+
+static void concatenate() {
+  ObjString* right = AS_STRING(pop());
+  ObjString* left = AS_STRING(pop());
+
+  size_t length = left->length + right->length;
+  char* chars = ALLOCATE(char, length + 1);
+
+  memcpy(chars, left->chars, left->length);
+  memcpy(chars + left->length, right->chars, right->length);
+  chars[length] = '\0';
+
+  ObjString* result = takeString(chars, length);
+  push(OBJ_VAL(result));
 }
 
 /**
@@ -187,7 +205,17 @@ static InterpretResult run() {
       BINARY_OP(BOOL_VAL, <=);
       break;
     case OP_ADD:
-      BINARY_OP(NUMBER_VAL, +);
+      if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+        double right = AS_NUMBER(pop());
+        double left = AS_NUMBER(pop());
+        push(NUMBER_VAL(left + right));
+      } else if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+        concatenate();
+      } else {
+        runtimeError("Operands must be two numbers of two strings.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
       break;
     case OP_SUBTRACT:
       BINARY_OP(NUMBER_VAL, -);
