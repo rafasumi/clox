@@ -282,6 +282,10 @@ static void binary() {
   }
 }
 
+/**
+ * \brief Function to parse a literal expression
+ *
+ */
 static void literal() {
   switch (parser.previous.type) {
   case TOKEN_FALSE:

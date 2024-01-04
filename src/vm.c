@@ -21,6 +21,13 @@ static void resetStack() {
   vm.stackTop = vm.stack;
 }
 
+/**
+ * \brief Variadic function used to report a runtime error in the appropriate
+ * line
+ *
+ * \param format Format string for the error message
+ * \param ... Arguments for format specification
+ */
 static void runtimeError(const char* format, ...) {
   va_list args;
   va_start(args, format);
@@ -50,12 +57,27 @@ Value pop() {
   return *vm.stackTop;
 }
 
+/**
+ * \brief Returns the value at a certain distance in the stack without popping
+ * it
+ *
+ * \param distance How far down the stack the target the desired value is
+ *
+ * \return The peeked Value
+ */
 static Value peek(const int32_t distance) {
   return vm.stackTop[-1 - distance];
 }
 
+/**
+ * \brief Returns whether a Value is falsey or not
+ *
+ * \param value The Value in consideration
+ *
+ * \return Boolean value that indicates if the parameter is falsey
+ */
 static bool isFalsey(const Value value) {
-  return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+  return IS_NIL(value) || (IS_BOOL(value) && AS_BOOL(value) == false);
 }
 
 /**
@@ -77,7 +99,8 @@ static InterpretResult run() {
   (vm.chunk->constants                                                         \
        .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
 
-// Apply a binary operation based on the two next values at stack
+// Apply a binary operation based on the two next values at stack and on the
+// type of the operands
 #define BINARY_OP(valueType, op)                                               \
   do {                                                                         \
     if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {                          \

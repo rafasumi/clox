@@ -16,22 +16,27 @@ typedef enum {
   OP_CONSTANT, /**< Loads a constant value with an 8-bit offset to the stack */
   OP_CONSTANT_LONG, /**< Loads a constant value with a 24-bit offset to the
                        stack */
-  OP_NIL,
-  OP_TRUE,
-  OP_FALSE,
-  OP_NOT,
-  OP_NEGATE,        /**< Negates the value at the top of the stack */
-  OP_EQUAL,
-  OP_NOT_EQUAL,
-  OP_GREATER,
-  OP_GTE,
-  OP_LESS,
-  OP_LTE,
-  OP_ADD,           /**< Adds the next two values in the stack */
-  OP_SUBTRACT,      /**< Subtracts the next two values in the stack */
-  OP_MULTIPLY,      /**< Multiplies the next two values in the stack */
-  OP_DIVIDE,        /**< Divides the next two values in the stack */
-  OP_RETURN         /**< Returns from the current function */
+  OP_NIL,           /**< Loads a nil value to the stack */
+  OP_TRUE,          /**< Loads a true boolean value to the stack */
+  OP_FALSE,         /**< Loads a false boolean value to the stack */
+  OP_NOT,    /**< Applies logical negation to the value at the top of the stack
+              */
+  OP_NEGATE, /**< Negates the value at the top of the stack */
+  OP_EQUAL,  /**< Compares the next two values in the stack using equality */
+  OP_NOT_EQUAL, /**< Compares the next two values in the stack using inequality
+                 */
+  OP_GREATER,   /**< Compares the next two values in the stack using "greater
+                   than" */
+  OP_GTE,  /**< Compares the next two values in the stack using "greater than or
+              equal to" */
+  OP_LESS, /**< Compares the next two values in the stack using "less than" */
+  OP_LTE,  /**< Compares the next two values in the stack using "less than or
+              equal to" */
+  OP_ADD,  /**< Adds the next two values in the stack */
+  OP_SUBTRACT, /**< Subtracts the next two values in the stack */
+  OP_MULTIPLY, /**< Multiplies the next two values in the stack */
+  OP_DIVIDE,   /**< Divides the next two values in the stack */
+  OP_RETURN    /**< Returns from the current function */
 } OpCode;
 
 /**
