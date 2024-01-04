@@ -7,6 +7,8 @@
 
 #include "common.h"
 
+#define ALLOCATE(type, count) (type*)reallocate(NULL, 0, sizeof(type) * count)
+
 /**
  * \def GROW_CAPACITY(capacity)
  * \brief Determines the next capacity for an array given its current capacity

@@ -7,6 +7,11 @@
 
 #include "common.h"
 
+// ------- Forward declarations -------
+typedef struct Obj Obj;
+typedef struct ObjString ObjString;
+// ------------------------------------
+
 /**
  * \enum ValueType
  * \brief Enum for all possible value types in Lox
@@ -15,6 +20,7 @@ typedef enum {
   VAL_BOOL,   /**< Boolean value */
   VAL_NIL,    /**< Nil value */
   VAL_NUMBER, /**< Numeric value */
+  VAL_OBJ     /**< Heap-allocated value */
 } ValueType;
 
 /**
@@ -26,6 +32,7 @@ typedef struct {
   union {
     bool boolean;
     double number;
+    Obj* obj;
   } as; /**< Tagged union used to store the actual value with the appropriate
            type */
 } Value;
@@ -48,6 +55,8 @@ typedef struct {
  */
 #define IS_NUMBER(value) ((value).type == VAL_NUMBER)
 
+#define IS_OBJ(value) ((value).type == VAL_OBJ)
+
 /**
  * \def AS_BOOL(value)
  * \brief Gets the stored Value as a boolean value
@@ -59,6 +68,8 @@ typedef struct {
  * \brief Gets the stored Value as a numeric value
  */
 #define AS_NUMBER(value) ((value).as.number)
+
+#define AS_OBJ(value) ((value).as.obj)
 
 /**
  * \def BOOL_VAL(value)
@@ -77,6 +88,8 @@ typedef struct {
  * \brief Creates a Value of type number with a specified value
  */
 #define NUMBER_VAL(value) ((Value){VAL_NUMBER, {.number = value}})
+
+#define OBJ_VAL(object) ((Value){VAL_NUMBER, {.obj = (Obj*)object}})
 
 /**
  * \struct ValueArray
