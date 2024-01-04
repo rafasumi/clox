@@ -89,7 +89,7 @@ typedef struct {
  */
 #define NUMBER_VAL(value) ((Value){VAL_NUMBER, {.number = value}})
 
-#define OBJ_VAL(object) ((Value){VAL_NUMBER, {.obj = (Obj*)object}})
+#define OBJ_VAL(object) ((Value){VAL_OBJ, {.obj = (Obj*)object}})
 
 /**
  * \struct ValueArray
