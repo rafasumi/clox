@@ -55,6 +55,10 @@ typedef struct {
  */
 #define IS_NUMBER(value) ((value).type == VAL_NUMBER)
 
+/**
+ * \def IS_OBJ(value)
+ * \brief Helper macro to determine if a Value is of type object
+ */
 #define IS_OBJ(value) ((value).type == VAL_OBJ)
 
 /**
@@ -69,6 +73,10 @@ typedef struct {
  */
 #define AS_NUMBER(value) ((value).as.number)
 
+/**
+ * \def AS_OBJ(value)
+ * \brief Gets the stored Value as an object value
+ */
 #define AS_OBJ(value) ((value).as.obj)
 
 /**
@@ -89,6 +97,10 @@ typedef struct {
  */
 #define NUMBER_VAL(value) ((Value){VAL_NUMBER, {.number = value}})
 
+/**
+ * \def NUMBER_VAL(value)
+ * \brief Creates a Value of type object with a specified object pointer
+ */
 #define OBJ_VAL(object) ((Value){VAL_OBJ, {.obj = (Obj*)object}})
 
 /**

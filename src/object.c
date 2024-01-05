@@ -1,3 +1,7 @@
+/*! \file object.c
+    \brief Definitions of functions from object.h
+*/
+
 #include "object.h"
 #include "memory.h"
 #include "value.h"
@@ -5,9 +9,24 @@
 
 #include <string.h>
 
+/**
+ * \def ALLOCATE_OBJ(type, objectType)
+ * \brief Helper macro to allocate an object of a given type
+ */
 #define ALLOCATE_OBJ(type, objectType)                                         \
   (type*)allocateObject(sizeof(type), objectType)
 
+/**
+ * \brief Allocates a generic Obj with a given size and type.
+ *
+ * This function also updated the linked-list of heap-allocated objects.
+ *
+ * \param size Size of the object that will be allocated
+ * \param type Type of the object that will be allocated
+ *
+ * \return Pointer to the allocated Object
+ *
+ */
 static Obj* allocateObject(const size_t size, const ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;

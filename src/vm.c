@@ -86,6 +86,13 @@ static bool isFalsey(const Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && AS_BOOL(value) == false);
 }
 
+/**
+ * \brief Concatenates the next two value at the value stack, assuming that they
+ * are strings.
+ * 
+ * This function has to allocate a new string for the concatenated string.
+ *
+ */
 static void concatenate() {
   ObjString* right = AS_STRING(pop());
   ObjString* left = AS_STRING(pop());

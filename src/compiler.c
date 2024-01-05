@@ -328,6 +328,10 @@ static void number() {
   emitConstant(NUMBER_VAL(value));
 }
 
+/**
+ * \brief Function to parse a string expression
+ *
+ */
 static void string() {
   emitConstant(OBJ_VAL(
       copyString(parser.previous.start + 1, parser.previous.length - 2)));

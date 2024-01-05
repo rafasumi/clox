@@ -21,6 +21,11 @@ void* reallocate(void* pointer, const size_t oldSize, const size_t newSize) {
   return result;
 }
 
+/**
+ * \brief Frees a single heap-allocated object based on its object type
+ *
+ * \param object Object to be freed
+ */
 static void freeObject(Obj* object) {
   switch (object->type) {
   case OBJ_STRING:
