@@ -6,6 +6,19 @@
 #define CLOX_MEMORY_H
 
 #include "common.h"
+#include "object.h"
+
+/**
+ * \def ALLOCATE(type, count)
+ * \brief Allocates an array of a given type with a specified size
+ */
+#define ALLOCATE(type, count) (type*)reallocate(NULL, 0, sizeof(type) * count)
+
+/**
+ * \def FREE(type, pointer)
+ * \brief Frees an array of a given type
+ */
+#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0);
 
 /**
  * \def GROW_CAPACITY(capacity)
@@ -38,5 +51,11 @@
  * \return Pointer to the newly reallocated memory location
  */
 void* reallocate(void* pointer, const size_t oldSize, const size_t newSize);
+
+/**
+ * \brief Frees all allocated objects in the virtual machine
+ * 
+ */
+void freeObjects();
 
 #endif

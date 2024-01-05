@@ -5,12 +5,15 @@
 #include "vm.h"
 #include "common.h"
 #include "compiler.h"
+#include "memory.h"
+#include "object.h"
 
 #ifdef DEBUG
 #include "debug.h"
 #endif
 
 #include <stdarg.h>
+#include <string.h>
 
 VM vm;
 
@@ -43,9 +46,12 @@ static void runtimeError(const char* format, ...) {
 
 void initVM() {
   resetStack();
+  vm.objects = NULL;
 }
 
-void freeVM() {}
+void freeVM() {
+  freeObjects();
+}
 
 void push(const Value value) {
   *vm.stackTop = value;
@@ -78,6 +84,27 @@ static Value peek(const int32_t distance) {
  */
 static bool isFalsey(const Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && AS_BOOL(value) == false);
+}
+
+/**
+ * \brief Concatenates the next two value at the value stack, assuming that they
+ * are strings.
+ * 
+ * This function has to allocate a new string for the concatenated string.
+ *
+ */
+static void concatenate() {
+  ObjString* right = AS_STRING(pop());
+  ObjString* left = AS_STRING(pop());
+
+  size_t length = left->length + right->length;
+  ObjString* concatenatedString = allocateString(length);
+
+  memcpy(concatenatedString->chars, left->chars, left->length);
+  memcpy(concatenatedString->chars + left->length, right->chars, right->length);
+  concatenatedString->chars[length] = '\0';
+
+  push(OBJ_VAL(concatenatedString));
 }
 
 /**
@@ -187,7 +214,17 @@ static InterpretResult run() {
       BINARY_OP(BOOL_VAL, <=);
       break;
     case OP_ADD:
-      BINARY_OP(NUMBER_VAL, +);
+      if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+        double right = AS_NUMBER(pop());
+        double left = AS_NUMBER(pop());
+        push(NUMBER_VAL(left + right));
+      } else if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+        concatenate();
+      } else {
+        runtimeError("Operands must be two numbers or two strings.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
       break;
     case OP_SUBTRACT:
       BINARY_OP(NUMBER_VAL, -);
