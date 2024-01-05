@@ -23,10 +23,10 @@ struct Obj {
 struct ObjString {
   Obj obj;
   size_t length;
-  char* chars;
+  char chars[];
 };
 
-ObjString* takeString(char* chars, const size_t length);
+ObjString* allocateString(const size_t length);
 ObjString* copyString(const char* chars, const size_t length);
 void printObject(const Value value);
 

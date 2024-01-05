@@ -25,8 +25,8 @@ static void freeObject(Obj* object) {
   switch (object->type) {
   case OBJ_STRING:
     ObjString* string = (ObjString*)object;
-    FREE_ARRAY(char, string->chars, string->length + 1);
-    FREE(ObjString, object);
+    // Can't use the free macros here because of the flexible array member
+    reallocate(string, sizeof(ObjString) + string->length + 1, 0);
     break;
   }
 }

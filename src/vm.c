@@ -91,14 +91,13 @@ static void concatenate() {
   ObjString* left = AS_STRING(pop());
 
   size_t length = left->length + right->length;
-  char* chars = ALLOCATE(char, length + 1);
+  ObjString* concatenatedString = allocateString(length);
 
-  memcpy(chars, left->chars, left->length);
-  memcpy(chars + left->length, right->chars, right->length);
-  chars[length] = '\0';
+  memcpy(concatenatedString->chars, left->chars, left->length);
+  memcpy(concatenatedString->chars + left->length, right->chars, right->length);
+  concatenatedString->chars[length] = '\0';
 
-  ObjString* result = takeString(chars, length);
-  push(OBJ_VAL(result));
+  push(OBJ_VAL(concatenatedString));
 }
 
 /**
