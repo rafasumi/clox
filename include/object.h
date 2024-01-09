@@ -56,8 +56,11 @@ struct Obj {
 struct ObjString {
   Obj obj;       /**< Obj field needed for "struct inheritance" */
   size_t length; /**< The length of the allocated string */
+  uint32_t hash;
   char chars[];  /**< The actual string, which is a flexible array member */
 };
+
+uint32_t hashString(const char* key, const size_t length);
 
 /**
  * \brief Allocates an ObjString with a given size.

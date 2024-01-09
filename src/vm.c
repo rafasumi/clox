@@ -89,7 +89,7 @@ static bool isFalsey(const Value value) {
 /**
  * \brief Concatenates the next two value at the value stack, assuming that they
  * are strings.
- * 
+ *
  * This function has to allocate a new string for the concatenated string.
  *
  */
@@ -103,6 +103,8 @@ static void concatenate() {
   memcpy(concatenatedString->chars, left->chars, left->length);
   memcpy(concatenatedString->chars + left->length, right->chars, right->length);
   concatenatedString->chars[length] = '\0';
+
+  concatenatedString->hash = hashString(concatenatedString->chars, length);
 
   push(OBJ_VAL(concatenatedString));
 }
