@@ -6,6 +6,7 @@
 #define CLOX_VM_H
 
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 /**
@@ -24,6 +25,7 @@ typedef struct {
   uint8_t* ip;            /**< Pointer to the next instruction to be executed */
   Value stack[STACK_MAX]; /**< Value stack used to manage temporary values */
   Value* stackTop;        /**< Pointer to the top of the stack */
+  Table strings;
   Obj* objects; /**< Pointer to the head of the linked-list of heap-allocated
                    objects */
 } VM;

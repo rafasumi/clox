@@ -49,8 +49,10 @@ static void adjustCapacity(Table* table, const size_t capacity) {
     entries[i].value = NIL_VAL;
   }
 
+  // Re-insert every entry into the new empty array
+  // Tombstones aren't reinserted, thus the count is set to 0
   table->count = 0;
-  for (size_t i = 0; i < capacity; ++i) {
+  for (size_t i = 0; i < table->capacity; ++i) {
     Entry* entry = &table->entries[i];
     if (entry->key == NULL)
       continue;
@@ -116,5 +118,26 @@ void tableAddAll(const Table* from, Table* to) {
     Entry* entry = &from->entries[i];
     if (entry->key != NULL)
       tableSet(to, entry->key, entry->value);
+  }
+}
+
+ObjString* tableFindString(Table* table, const char* chars, const size_t length,
+                           const uint32_t hash) {
+  if (table->count == 0)
+    return false;
+
+  uint32_t index = hash % table->capacity;
+  while (true) {
+    Entry* entry = &table->entries[index];
+    if (entry->key == NULL) {
+      // Stop if we find an empty non-tombstone entry.
+      if (IS_NIL(entry->value))
+        return NULL;
+    } else if (entry->key->length == length && entry->key->hash == hash &&
+               memcmp(entry->key->chars, chars, length) == 0) {
+      return entry->key;
+    }
+
+    index = (index + 1) % table->capacity;
   }
 }

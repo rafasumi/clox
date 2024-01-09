@@ -4,6 +4,7 @@
 
 #include "object.h"
 #include "memory.h"
+#include "table.h"
 #include "value.h"
 #include "vm.h"
 
@@ -36,7 +37,7 @@ static Obj* allocateObject(const size_t size, const ObjType type) {
   return object;
 }
 
-uint32_t hashString(const char* key, const size_t length) {
+static uint32_t hashString(const char* key, const size_t length) {
   uint32_t hash = 2166136261u;
   for (size_t i = 0; i < length; i++) {
     hash ^= (uint8_t)key[i];
@@ -45,22 +46,52 @@ uint32_t hashString(const char* key, const size_t length) {
   return hash;
 }
 
-ObjString* allocateString(const size_t length) {
-  ObjString* string =
-      (ObjString*)allocateObject(sizeof(ObjString) + length + 1, OBJ_STRING);
+/**
+ * \brief Allocates an ObjString with a given size.
+ *
+ * The function assumes that the string will be copied into the struct after
+ * allocation.
+ *
+ * \param length Length of the ObjString to be allocated
+ *
+ * \return Pointer to the allocated ObjString
+ */
+static ObjString* allocateString(char* chars, const size_t length,
+                                 const uint32_t hash) {
+  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+  string->chars = chars;
   string->length = length;
+  string->hash = hash;
 
+  tableSet(&vm.strings, string, NIL_VAL);
   return string;
 }
 
+ObjString* takeString(char* chars, const size_t length) {
+  uint32_t hash = hashString(chars, length);
+
+  ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
+  if (interned != NULL) {
+    FREE_ARRAY(char, chars, length + 1);
+    return interned;
+  }
+
+  return allocateString(chars, length, hash);
+}
+
 ObjString* copyString(const char* chars, const size_t length) {
-  ObjString* string = allocateString(length);
-  string->hash = hashString(chars, length);
+  uint32_t hash = hashString(chars, length);
 
-  memcpy(string->chars, chars, length);
-  string->chars[length] = '\0';
+  ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
+  if (interned != NULL) {
+    return interned;
+  }
 
-  return string;
+  char* heapChars = ALLOCATE(char, length + 1);
+  memcpy(heapChars, chars, length);
+  heapChars[length] = '\0';
+
+  return allocateString(heapChars, length, hash);
 }
 
 void printObject(const Value value) {

@@ -56,23 +56,11 @@ struct Obj {
 struct ObjString {
   Obj obj;       /**< Obj field needed for "struct inheritance" */
   size_t length; /**< The length of the allocated string */
+  char* chars;
   uint32_t hash;
-  char chars[];  /**< The actual string, which is a flexible array member */
 };
 
-uint32_t hashString(const char* key, const size_t length);
-
-/**
- * \brief Allocates an ObjString with a given size.
- *
- * The function assumes that the string will be copied into the struct after
- * allocation.
- *
- * \param length Length of the ObjString to be allocated
- *
- * \return Pointer to the allocated ObjString
- */
-ObjString* allocateString(const size_t length);
+ObjString* takeString(char* chars, const size_t length);
 
 /**
  * \brief Allocates an ObjString and copies an existing string into it.
@@ -97,7 +85,7 @@ void printObject(const Value value);
  *
  * \param value Value whose type will be tested
  * \param type Target ObjType
- * 
+ *
  * \return Boolean value that indicates if the value has the specified type
  */
 static inline bool isObjType(const Value value, const ObjType type) {
