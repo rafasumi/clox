@@ -36,6 +36,15 @@ static Obj* allocateObject(const size_t size, const ObjType type) {
   return object;
 }
 
+uint32_t hashString(const char* key, const size_t length) {
+  uint32_t hash = 2166136261u;
+  for (size_t i = 0; i < length; i++) {
+    hash ^= (uint8_t)key[i];
+    hash *= 16777619;
+  }
+  return hash;
+}
+
 ObjString* allocateString(const size_t length) {
   ObjString* string =
       (ObjString*)allocateObject(sizeof(ObjString) + length + 1, OBJ_STRING);
@@ -46,6 +55,7 @@ ObjString* allocateString(const size_t length) {
 
 ObjString* copyString(const char* chars, const size_t length) {
   ObjString* string = allocateString(length);
+  string->hash = hashString(chars, length);
 
   memcpy(string->chars, chars, length);
   string->chars[length] = '\0';
