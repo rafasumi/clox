@@ -9,6 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * \def TABLE_MAX_LOAD
+ * \brief Maximum load factor that a table can have before having its capacity
+ * adjusted
+ */
 #define TABLE_MAX_LOAD 0.75
 
 void initTable(Table* table) {
