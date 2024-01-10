@@ -56,23 +56,30 @@ struct Obj {
 struct ObjString {
   Obj obj;       /**< Obj field needed for "struct inheritance" */
   size_t length; /**< The length of the allocated string */
-  char chars[];  /**< The actual string, which is a flexible array member */
+  char* chars;   /**< Pointer to the string in the heap */
+  uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
 
 /**
- * \brief Allocates an ObjString with a given size.
+ * \brief Allocates an ObjString and takes ownership of an already allocated
+ * string.
  *
- * The function assumes that the string will be copied into the struct after
- * allocation.
+ * Because of string interning, the allocation will only happen if there isn't
+ * already an allocated ObjString with the string specified in \p chars.
  *
- * \param length Length of the ObjString to be allocated
+ * \param chars Pointer to the string whose ownership will be taken
+ * \param length Length of the string that will taken
  *
  * \return Pointer to the allocated ObjString
  */
-ObjString* allocateString(const size_t length);
+ObjString* takeString(char* chars, const size_t length);
 
 /**
- * \brief Allocates an ObjString and copies an existing string into it.
+ * \brief Allocates an ObjString and a string, and copies an existing string
+ * into it.
+ *
+ * Because of string interning, the allocation will only happen if there isn't
+ * already an allocated ObjString with the string specified in \p chars.
  *
  * \param chars Pointer to the string that will be copied
  * \param length Length of the string that will be copied
@@ -94,7 +101,7 @@ void printObject(const Value value);
  *
  * \param value Value whose type will be tested
  * \param type Target ObjType
- * 
+ *
  * \return Boolean value that indicates if the value has the specified type
  */
 static inline bool isObjType(const Value value, const ObjType type) {

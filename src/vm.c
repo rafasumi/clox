@@ -47,9 +47,11 @@ static void runtimeError(const char* format, ...) {
 void initVM() {
   resetStack();
   vm.objects = NULL;
+  initTable(&vm.strings);
 }
 
 void freeVM() {
+  freeTable(&vm.strings);
   freeObjects();
 }
 
@@ -89,7 +91,7 @@ static bool isFalsey(const Value value) {
 /**
  * \brief Concatenates the next two value at the value stack, assuming that they
  * are strings.
- * 
+ *
  * This function has to allocate a new string for the concatenated string.
  *
  */
@@ -98,11 +100,12 @@ static void concatenate() {
   ObjString* left = AS_STRING(pop());
 
   size_t length = left->length + right->length;
-  ObjString* concatenatedString = allocateString(length);
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, left->chars, left->length);
+  memcpy(chars + left->length, right->chars, right->length);
+  chars[length] = '\0';
 
-  memcpy(concatenatedString->chars, left->chars, left->length);
-  memcpy(concatenatedString->chars + left->length, right->chars, right->length);
-  concatenatedString->chars[length] = '\0';
+  ObjString* concatenatedString = takeString(chars, length);
 
   push(OBJ_VAL(concatenatedString));
 }
