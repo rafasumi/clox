@@ -37,6 +37,15 @@ static Obj* allocateObject(const size_t size, const ObjType type) {
   return object;
 }
 
+/**
+ * \brief Produces the hash code for a given string using the FNV-1a hash
+ * function.
+ *
+ * \param key Pointer to the string
+ * \param length Length of the string
+ *
+ * \return 32-bit integer hash code
+ */
 static uint32_t hashString(const char* key, const size_t length) {
   uint32_t hash = 2166136261u;
   for (size_t i = 0; i < length; i++) {

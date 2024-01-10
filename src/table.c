@@ -1,3 +1,7 @@
+/*! \file table.c
+    \brief Definitions of functions from table.h
+*/
+
 #include "table.h"
 #include "memory.h"
 #include "object.h"
@@ -18,6 +22,16 @@ void freeTable(Table* table) {
   initTable(table);
 }
 
+/**
+ * \brief Searches for a key in a given entry array using ObjString* comparison.
+ *
+ * \param entries Pointer to the entries array
+ * \param capacity Current capacity of the entries array
+ * \param key Key that will be searched
+ *
+ * \return Pointer to the stored entry if its key is present. Otherwise, a
+ * pointer to the first empty (or tombstone) position.
+ */
 static Entry* findEntry(Entry* entries, const size_t capacity,
                         const ObjString* key) {
   uint32_t index = key->hash % capacity;
@@ -42,6 +56,15 @@ static Entry* findEntry(Entry* entries, const size_t capacity,
   }
 }
 
+/**
+ * \brief Adjusts the capacity of the entries array of a given hash table.
+ *
+ * The function also reinserts every entry from the previous array to the newly
+ * allocated array so that they are placed in the appropriate position.
+ *
+ * \param table Pointer to the hash table
+ * \param capacity Current capacity of the entries array
+ */
 static void adjustCapacity(Table* table, const size_t capacity) {
   Entry* entries = ALLOCATE(Entry, capacity);
   for (size_t i = 0; i < capacity; ++i) {
@@ -113,11 +136,11 @@ bool tableDelete(Table* table, const ObjString* key) {
   return true;
 }
 
-void tableAddAll(const Table* from, Table* to) {
-  for (size_t i = 0; i < from->capacity; ++i) {
-    Entry* entry = &from->entries[i];
+void tableAddAll(const Table* src, Table* dest) {
+  for (size_t i = 0; i < src->capacity; ++i) {
+    Entry* entry = &src->entries[i];
     if (entry->key != NULL)
-      tableSet(to, entry->key, entry->value);
+      tableSet(dest, entry->key, entry->value);
   }
 }
 
