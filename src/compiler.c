@@ -562,6 +562,8 @@ static void synchronize() {
     default:
       break;
     }
+
+    advance();
   }
 }
 
