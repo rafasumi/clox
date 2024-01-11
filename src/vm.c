@@ -47,10 +47,12 @@ static void runtimeError(const char* format, ...) {
 void initVM() {
   resetStack();
   vm.objects = NULL;
+  initTable(&vm.globals);
   initTable(&vm.strings);
 }
 
 void freeVM() {
+  freeTable(&vm.globals);
   freeTable(&vm.strings);
   freeObjects();
 }
@@ -110,6 +112,36 @@ static void concatenate() {
   push(OBJ_VAL(concatenatedString));
 }
 
+static bool getGlobal(const ObjString* name) {
+  Value value;
+  if (!tableGet(&vm.globals, name, &value)) {
+    runtimeError("Undefined variable '%s'.", name->chars);
+    return false;
+  }
+  
+  push(value);
+  return true;
+}
+
+static void defineGlobal(ObjString* name) {
+  tableSet(&vm.globals, name, peek(0));
+
+  // Ensures the VM can still find the value if a garbage collection is
+  // triggered right in the middle of adding the name to the hash table
+  pop();
+}
+
+static bool setGlobal(ObjString* name) {
+  if (tableSet(&vm.globals, name, peek(0))) {
+    tableDelete(&vm.globals, name);
+    runtimeError("Undefined variable '%s'.", name->chars);
+
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * \brief Helper function that runs the instructions in the VM.
  *
@@ -128,6 +160,9 @@ static InterpretResult run() {
 #define READ_CONSTANT_LONG()                                                   \
   (vm.chunk->constants                                                         \
        .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
+
+#define READ_STRING() AS_STRING(READ_CONSTANT())
+#define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
 
 // Apply a binary operation based on the two next values at stack and on the
 // type of the operands
@@ -180,6 +215,31 @@ static InterpretResult run() {
       break;
     case OP_FALSE:
       push(BOOL_VAL(false));
+      break;
+    case OP_POP:
+      pop();
+      break;
+    case OP_GET_GLOBAL:
+      if (!getGlobal(READ_STRING()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_GET_GLOBAL_LONG:
+      if (!getGlobal(READ_STRING_LONG()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_DEFINE_GLOBAL:
+      defineGlobal(READ_STRING());
+      break;
+    case OP_DEFINE_GLOBAL_LONG:
+      defineGlobal(READ_STRING_LONG());
+      break;
+    case OP_SET_GLOBAL:
+      if (!setGlobal(READ_STRING()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_SET_GLOBAL_LONG:
+      if (!setGlobal(READ_STRING_LONG()))
+        return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
@@ -238,9 +298,13 @@ static InterpretResult run() {
     case OP_DIVIDE:
       BINARY_OP(NUMBER_VAL, /);
       break;
-    case OP_RETURN:
+    case OP_PRINT: {
       printValue(pop());
       printf("\n");
+      break;
+    }
+    case OP_RETURN:
+      // Exit the interpreter
       return INTERPRET_OK;
     default:
       break;
@@ -250,6 +314,8 @@ static InterpretResult run() {
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
+#undef READ_STRING
+#undef READ_STRING_LONG
 #undef BINARY_OP
 }
 

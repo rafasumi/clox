@@ -19,6 +19,13 @@ typedef enum {
   OP_NIL,           /**< Loads a nil value to the stack */
   OP_TRUE,          /**< Loads a true boolean value to the stack */
   OP_FALSE,         /**< Loads a false boolean value to the stack */
+  OP_POP,
+  OP_GET_GLOBAL,
+  OP_GET_GLOBAL_LONG,
+  OP_DEFINE_GLOBAL,
+  OP_DEFINE_GLOBAL_LONG,
+  OP_SET_GLOBAL,
+  OP_SET_GLOBAL_LONG,
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -36,7 +43,8 @@ typedef enum {
   OP_SUBTRACT, /**< Subtracts the next two values in the stack */
   OP_MULTIPLY, /**< Multiplies the next two values in the stack */
   OP_DIVIDE,   /**< Divides the next two values in the stack */
-  OP_RETURN    /**< Returns from the current function */
+  OP_PRINT,
+  OP_RETURN /**< Returns from the current function */
 } OpCode;
 
 /**
@@ -109,6 +117,6 @@ uint32_t getLine(const Chunk* chunk, const size_t instructionOffset);
  *
  * \return The offset of the constant in the chunk's constants array
  */
-size_t addConstant(Chunk* chunk, const Value value);
+uint32_t addConstant(Chunk* chunk, const Value value);
 
 #endif
