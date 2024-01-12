@@ -66,8 +66,11 @@ typedef struct {
                             specified token as an operator */
 } ParseRule;
 
+// --------- Module variables ---------
 Parser parser;
 Chunk* compilingChunk;
+Table stringConstants;
+// ------------------------------------
 
 /**
  * \brief Returns a pointer to chunk of bytecode that is the current target of
@@ -369,7 +372,20 @@ static void string(const bool canAssign) {
 }
 
 static uint32_t identifierConstant(const Token* name) {
-  return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+  // This memory will leak for now, while there isn't a GC
+  ObjString* nameString = copyString(name->start, name->length);
+
+  Value offsetValue;
+  if (tableGet(&stringConstants, nameString, &offsetValue)) {
+    // The name was already added to the constant table, so we can just fetch
+    // its offset in the stringConstants hash table
+    return (uint32_t)AS_NUMBER(offsetValue);
+  }
+
+  uint32_t offset = makeConstant(OBJ_VAL(nameString));
+  tableSet(&stringConstants, nameString, NUMBER_VAL((double)offset));
+
+  return offset;
 }
 
 static void namedVariable(const Token name, const bool canAssign) {
@@ -588,6 +604,7 @@ static void statement() {
 
 bool compile(const char* source, Chunk* chunk) {
   initScanner(source);
+  initTable(&stringConstants);
 
   compilingChunk = chunk;
 
@@ -601,6 +618,7 @@ bool compile(const char* source, Chunk* chunk) {
   }
 
   endCompiler();
+  freeTable(&stringConstants);
 
   return !parser.hadError;
 }
