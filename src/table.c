@@ -101,7 +101,7 @@ bool tableGet(const Table* table, const ObjString* key, Value* value) {
     return false;
 
   Entry* entry = findEntry(table->entries, table->capacity, key);
-  if (entry == NULL)
+  if (entry->key == NULL)
     return false;
 
   *value = entry->value;
