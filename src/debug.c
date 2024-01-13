@@ -48,6 +48,18 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
   return offset + 2;
 }
 
+static size_t globalOffsetInstruction(const char* name, const size_t offset) {
+  printf("%-16s %4ld\n", name, offset);
+
+  return offset + 2;
+}
+
+static size_t globalLongOffsetInstruction(const char* name, const size_t offset) {
+  printf("%-16s %4ld\n", name, offset);
+
+  return offset + 4;
+}
+
 /**
  * \brief Display an OP_CONSTANT_LONG instruction at a given offset. This
  * instruction has three 8-bit operands.
@@ -97,17 +109,17 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
   case OP_POP:
     return simpleInstruction("OP_POP", offset);
   case OP_GET_GLOBAL:
-    return constantInstruction("OP_GET_GLOBAL", chunk, offset);
+    return globalOffsetInstruction("OP_GET_GLOBAL", offset);
   case OP_GET_GLOBAL_LONG:
-    return constantLongInstruction("OP_GET_GLOBAL_LONG", chunk, offset);
+    return globalLongOffsetInstruction("OP_GET_GLOBAL_LONG", offset);
   case OP_DEFINE_GLOBAL:
-    return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+    return globalOffsetInstruction("OP_DEFINE_GLOBAL", offset);
   case OP_DEFINE_GLOBAL_LONG:
-    return constantLongInstruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
+    return globalLongOffsetInstruction("OP_DEFINE_GLOBAL_LONG", offset);
   case OP_SET_GLOBAL:
-    return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+    return globalOffsetInstruction("OP_SET_GLOBAL", offset);
   case OP_SET_GLOBAL_LONG:
-    return constantLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
+    return globalLongOffsetInstruction("OP_SET_GLOBAL_LONG", offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:

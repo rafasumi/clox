@@ -47,12 +47,14 @@ static void runtimeError(const char* format, ...) {
 void initVM() {
   resetStack();
   vm.objects = NULL;
-  initTable(&vm.globals);
+  initTable(&vm.globalNames);
+  initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
 }
 
 void freeVM() {
-  freeTable(&vm.globals);
+  freeTable(&vm.globalNames);
+  freeGlobalVarArray(&vm.globalValues);
   freeTable(&vm.strings);
   freeObjects();
 }
@@ -112,33 +114,31 @@ static void concatenate() {
   push(OBJ_VAL(concatenatedString));
 }
 
-static bool getGlobal(const ObjString* name) {
-  Value value;
-  if (!tableGet(&vm.globals, name, &value)) {
-    runtimeError("Undefined variable '%s'.", name->chars);
+static bool getGlobal(const uint32_t offset) {
+  GlobalVar var = vm.globalValues.vars[offset];
+
+  if (IS_UNDEFINED(var.value)) {
+    runtimeError("Undefined variable '%s'.", var.identifier->chars);
     return false;
   }
-  
-  push(value);
+
+  push(var.value);
   return true;
 }
 
-static void defineGlobal(ObjString* name) {
-  tableSet(&vm.globals, name, peek(0));
-
-  // Ensures the VM can still find the value if a garbage collection is
-  // triggered right in the middle of adding the name to the hash table
-  pop();
+static void defineGlobal(const uint32_t offset) {
+  vm.globalValues.vars[offset].value = pop();
 }
 
-static bool setGlobal(ObjString* name) {
-  if (tableSet(&vm.globals, name, peek(0))) {
-    tableDelete(&vm.globals, name);
-    runtimeError("Undefined variable '%s'.", name->chars);
+static bool setGlobal(const uint32_t offset) {
+  GlobalVar* var = vm.globalValues.vars + offset;
 
+  if (IS_UNDEFINED(var->value)) {
+    runtimeError("Undefined variable '%s'.", var->identifier->chars);
     return false;
   }
 
+  var->value = peek(0);
   return true;
 }
 
@@ -151,15 +151,16 @@ static InterpretResult run() {
 // Read a single bytecode from the VM and updates the instruction pointer
 #define READ_BYTE() (*(vm.ip++))
 
+#define READ_LONG_OPERAND()                                                    \
+  READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)
+
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 
 // Read a constant from the chunk based on the 24-bit offset at the bytecode
 // array
-#define READ_CONSTANT_LONG()                                                   \
-  (vm.chunk->constants                                                         \
-       .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
+#define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_LONG_OPERAND()])
 
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
@@ -220,25 +221,25 @@ static InterpretResult run() {
       pop();
       break;
     case OP_GET_GLOBAL:
-      if (!getGlobal(READ_STRING()))
+      if (!getGlobal(READ_BYTE()))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_GET_GLOBAL_LONG:
-      if (!getGlobal(READ_STRING_LONG()))
+      if (!getGlobal(READ_LONG_OPERAND()))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_DEFINE_GLOBAL:
-      defineGlobal(READ_STRING());
+      defineGlobal(READ_BYTE());
       break;
     case OP_DEFINE_GLOBAL_LONG:
-      defineGlobal(READ_STRING_LONG());
+      defineGlobal(READ_LONG_OPERAND());
       break;
     case OP_SET_GLOBAL:
-      if (!setGlobal(READ_STRING()))
+      if (!setGlobal(READ_BYTE()))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_SET_GLOBAL_LONG:
-      if (!setGlobal(READ_STRING_LONG()))
+      if (!setGlobal(READ_LONG_OPERAND()))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_NOT:
@@ -312,6 +313,7 @@ static InterpretResult run() {
   }
 
 #undef READ_BYTE
+#undef READ_LONG_OPERAND
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
 #undef READ_STRING

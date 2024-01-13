@@ -17,10 +17,11 @@ typedef struct ObjString ObjString;
  * \brief Enum for all possible value types in Lox
  */
 typedef enum {
-  VAL_BOOL,   /**< Boolean value */
-  VAL_NIL,    /**< Nil value */
-  VAL_NUMBER, /**< Numeric value */
-  VAL_OBJ     /**< Heap-allocated value */
+  VAL_BOOL,     /**< Boolean value */
+  VAL_NIL,      /**< Nil value */
+  VAL_NUMBER,   /**< Numeric value */
+  VAL_OBJ,      /**< Heap-allocated value */
+  VAL_UNDEFINED /**< Internal use only. Represents a non-initialized variable */
 } ValueType;
 
 /**
@@ -60,6 +61,12 @@ typedef struct {
  * \brief Helper macro to determine if a Value is of type object
  */
 #define IS_OBJ(value) ((value).type == VAL_OBJ)
+
+/**
+ * \def IS_UNDEFINED(value)
+ * \brief Helper macro to determine if the type of a Value variable is VAL_UNDEF
+ */
+#define IS_UNDEFINED(value) ((value).type == VAL_UNDEFINED)
 
 /**
  * \def AS_BOOL(value)
@@ -102,6 +109,12 @@ typedef struct {
  * \brief Creates a Value of type object with a specified object pointer
  */
 #define OBJ_VAL(object) ((Value){VAL_OBJ, {.obj = (Obj*)object}})
+
+/**
+ * \def UNDEFINED_VAL(value)
+ * \brief Creates a Value of type object with a specified object pointer
+ */
+#define UNDEFINED_VAL ((Value){VAL_UNDEFINED, {.number = 0}})
 
 /**
  * \struct ValueArray

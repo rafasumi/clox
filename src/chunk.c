@@ -76,5 +76,5 @@ uint32_t getLine(const Chunk* chunk, const size_t instructionOffset) {
 uint32_t addConstant(Chunk* chunk, const Value value) {
   writeValueArray(&chunk->constants, value);
 
-  return chunk->constants.count - 1;
+  return (uint32_t)chunk->constants.count - 1;
 }

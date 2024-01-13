@@ -4,6 +4,7 @@
 
 #include "compiler.h"
 #include "common.h"
+#include "global.h"
 #include "object.h"
 #include "scanner.h"
 
@@ -69,7 +70,6 @@ typedef struct {
 // --------- Module variables ---------
 Parser parser;
 Chunk* compilingChunk;
-Table stringConstants;
 // ------------------------------------
 
 /**
@@ -200,9 +200,9 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
   emitByte(byte2);
 }
 
-static void emitConstantOffsetOperand(const uint8_t instruction,
-                                      const uint8_t instructionLong,
-                                      const uint32_t offset) {
+static void emitOffsetOperandInstruction(const uint8_t instruction,
+                                         const uint8_t instructionLong,
+                                         const uint32_t offset) {
   if (offset <= UINT8_MAX) {
     emitBytes(instruction, (uint8_t)offset);
   } else {
@@ -247,7 +247,7 @@ static uint32_t makeConstant(const Value value) {
 static void emitConstant(const Value value) {
   uint32_t offset = makeConstant(value);
 
-  emitConstantOffsetOperand(OP_CONSTANT, OP_CONSTANT_LONG, offset);
+  emitOffsetOperandInstruction(OP_CONSTANT, OP_CONSTANT_LONG, offset);
 }
 
 /**
@@ -372,18 +372,26 @@ static void string(const bool canAssign) {
 }
 
 static uint32_t identifierConstant(const Token* name) {
-  // This memory will leak for now, while there isn't a GC
-  ObjString* nameString = copyString(name->start, name->length);
+  ObjString* identifier = copyString(name->start, name->length);
 
-  Value offsetValue;
-  if (tableGet(&stringConstants, nameString, &offsetValue)) {
-    // The name was already added to the constant table, so we can just fetch
-    // its offset in the stringConstants hash table
-    return (uint32_t)AS_NUMBER(offsetValue);
+  Value globalValuesOffset;
+  if (tableGet(&vm.globalNames, identifier, &globalValuesOffset)) {
+    // The identifier has already been added to the globalValues array, so we
+    // just return its offset
+
+    return (uint32_t)AS_NUMBER(globalValuesOffset);
   }
 
-  uint32_t offset = makeConstant(OBJ_VAL(nameString));
-  tableSet(&stringConstants, nameString, NUMBER_VAL((double)offset));
+  // Watch out for double free of identifier
+  writeGlobalVarArray(&vm.globalValues, UNDEFINED_GLOBAL(identifier));
+
+  if (vm.globalValues.count > UINT24_MAX) {
+    error("Too many many defined identifiers");
+    return 0;
+  }
+
+  uint32_t offset = (uint32_t)vm.globalValues.count - 1;
+  tableSet(&vm.globalNames, identifier, NUMBER_VAL((double)offset));
 
   return offset;
 }
@@ -395,9 +403,9 @@ static void namedVariable(const Token name, const bool canAssign) {
     // Assignment expression
 
     expression();
-    emitConstantOffsetOperand(OP_SET_GLOBAL, OP_SET_GLOBAL_LONG, offset);
+    emitOffsetOperandInstruction(OP_SET_GLOBAL, OP_SET_GLOBAL_LONG, offset);
   } else {
-    emitConstantOffsetOperand(OP_GET_GLOBAL, OP_GET_GLOBAL_LONG, offset);
+    emitOffsetOperandInstruction(OP_GET_GLOBAL, OP_GET_GLOBAL_LONG, offset);
   }
 }
 
@@ -511,8 +519,8 @@ static uint32_t parseVariable(const char* errorMessage) {
 }
 
 static void defineVariable(uint32_t globalOffset) {
-  emitConstantOffsetOperand(OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
-                            globalOffset);
+  emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
+                               globalOffset);
 }
 
 /**
@@ -604,7 +612,6 @@ static void statement() {
 
 bool compile(const char* source, Chunk* chunk) {
   initScanner(source);
-  initTable(&stringConstants);
 
   compilingChunk = chunk;
 
@@ -618,7 +625,6 @@ bool compile(const char* source, Chunk* chunk) {
   }
 
   endCompiler();
-  freeTable(&stringConstants);
 
   return !parser.hadError;
 }
