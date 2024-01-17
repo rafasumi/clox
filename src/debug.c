@@ -31,9 +31,10 @@ static size_t simpleInstruction(const char* name, const size_t offset) {
 
 /**
  * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
- * has one 8-bit operand
+ * has one 8-bit operand.
  *
  * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
  * \param offset Offset of the instruction within the bytecode array
  *
  * \return Offset of the next instruction
@@ -54,6 +55,7 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
  * instruction has three 8-bit operands.
  *
  * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
  * \param offset Offset of the instruction within the bytecode array
  *
  * \return Offset of the next instruction
@@ -72,7 +74,18 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
-static size_t globalOffsetInstruction(const char* name, const Chunk* chunk, const size_t offset) {
+/**
+ * \brief Display an instruction which handles global variables. This
+ * instruction has one 8-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t globalInstruction(const char* name, const Chunk* chunk,
+                                const size_t offset) {
   uint8_t globalOffset = chunk->code[offset + 1];
 
   printf("%-16s %4d '", name, globalOffset);
@@ -82,10 +95,21 @@ static size_t globalOffsetInstruction(const char* name, const Chunk* chunk, cons
   return offset + 2;
 }
 
-static size_t globalLongOffsetInstruction(const char* name, const Chunk* chunk, const size_t offset) {
+/**
+ * \brief Display an instruction which handles global variables. This
+ * instruction has three 8-bit operands.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t globalLongInstruction(const char* name, const Chunk* chunk,
+                                    const size_t offset) {
   uint32_t globalOffset = (chunk->code[offset + 3] << 16) |
-                            (chunk->code[offset + 2] << 8) |
-                            chunk->code[offset + 1];
+                          (chunk->code[offset + 2] << 8) |
+                          chunk->code[offset + 1];
 
   printf("%-16s %4d '", name, globalOffset);
   printValue(vm.globalValues.vars[globalOffset].value);
@@ -120,17 +144,17 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
   case OP_POP:
     return simpleInstruction("OP_POP", offset);
   case OP_GET_GLOBAL:
-    return globalOffsetInstruction("OP_GET_GLOBAL", chunk, offset);
+    return globalInstruction("OP_GET_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_GET_GLOBAL_LONG", chunk, offset);
+    return globalLongInstruction("OP_GET_GLOBAL_LONG", chunk, offset);
   case OP_DEFINE_GLOBAL:
-    return globalOffsetInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+    return globalInstruction("OP_DEFINE_GLOBAL", chunk, offset);
   case OP_DEFINE_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
+    return globalLongInstruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
   case OP_SET_GLOBAL:
-    return globalOffsetInstruction("OP_SET_GLOBAL", chunk, offset);
+    return globalInstruction("OP_SET_GLOBAL", chunk, offset);
   case OP_SET_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
+    return globalLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:

@@ -118,12 +118,12 @@ typedef struct {
 
 /**
  * \struct ValueArray
- * \brief  Strucure that contains a array of constant values and its metadata.
+ * \brief  Strucure that contains an array of constant values and its metadata.
  */
 typedef struct {
-  size_t count;
-  size_t capacity;
-  Value* values;
+  size_t count;    /**< The number of values in the array */
+  size_t capacity; /**< The current capacity of the array */
+  Value* values;   /**< Pointer to the values in memory */
 } ValueArray;
 
 /**

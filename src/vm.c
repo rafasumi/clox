@@ -114,6 +114,16 @@ static void concatenate() {
   push(OBJ_VAL(concatenatedString));
 }
 
+/**
+ * \brief Auxiliary function that gets the value of global variable based on its
+ * offset in the globalValues array. The value is pushed to the stack.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors when fetching
+ * the variable
+ *
+ */
 static bool getGlobal(const uint32_t offset) {
   GlobalVar var = vm.globalValues.vars[offset];
 
@@ -126,10 +136,24 @@ static bool getGlobal(const uint32_t offset) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that defines a global variable by setting its
+ * value.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ */
 static void defineGlobal(const uint32_t offset) {
   vm.globalValues.vars[offset].value = pop();
 }
 
+/**
+ * \brief Auxiliary function that sets the value of a global variable only if it
+ * has already been defined.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool setGlobal(const uint32_t offset) {
   GlobalVar* var = vm.globalValues.vars + offset;
 
@@ -148,9 +172,10 @@ static bool setGlobal(const uint32_t offset) {
  * \return Result of the interpretation process
  */
 static InterpretResult run() {
-// Read a single bytecode from the VM and updates the instruction pointer
+// Read a single bytecode from the chunk and updates the instruction pointer
 #define READ_BYTE() (*(vm.ip++))
 
+// Read a 24-bit (or 3 bytes) operand from the chunk
 #define READ_LONG_OPERAND()                                                    \
   READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)
 
@@ -162,7 +187,10 @@ static InterpretResult run() {
 // array
 #define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_LONG_OPERAND()])
 
+// Read a string from the constants array with an 8-bit offset
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+
+// Read a string from the constants array with a 24-bit offset
 #define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
 
 // Apply a binary operation based on the two next values at stack and on the

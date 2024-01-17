@@ -19,13 +19,19 @@ typedef enum {
   OP_NIL,           /**< Loads a nil value to the stack */
   OP_TRUE,          /**< Loads a true boolean value to the stack */
   OP_FALSE,         /**< Loads a false boolean value to the stack */
-  OP_POP,
-  OP_GET_GLOBAL,
-  OP_GET_GLOBAL_LONG,
-  OP_DEFINE_GLOBAL,
-  OP_DEFINE_GLOBAL_LONG,
-  OP_SET_GLOBAL,
-  OP_SET_GLOBAL_LONG,
+  OP_POP,           /**< Pops a value from the stack */
+  OP_GET_GLOBAL, /**< Loads a global variable to the stack with an 8-bit offset
+                  */
+  OP_GET_GLOBAL_LONG, /**< Loads a global variable to the stack with a 24-bit
+                         offset */
+  OP_DEFINE_GLOBAL,   /**< Defines a new global variable variable with an 8-bit
+                         offset */
+  OP_DEFINE_GLOBAL_LONG, /**< Defines a new global variable variable with a
+                            24-bit offset */
+  OP_SET_GLOBAL, /**< Updates the value of a defined global variable with an
+                    8-bit offset */
+  OP_SET_GLOBAL_LONG, /**< Updates the value of a defined global variable with a
+                         24-bit offset */
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */

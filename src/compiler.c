@@ -165,10 +165,24 @@ static void consume(const TokenType type, const char* message) {
   errorAtCurrent(message);
 }
 
+/**
+ * \brief Check if the type of the current token is equal to a given type.
+ *
+ * \param type Expected type of the current token
+ *
+ * \return Boolean value that indicates if the types are the same
+ */
 static bool check(const TokenType type) {
   return parser.current.type == type;
 }
 
+/**
+ * \brief Consumes the current token if it has a given type
+ *
+ * \param type Expected type of the current token
+ *
+ * \return Boolean value that indicates if the token was consumed
+ */
 static bool match(const TokenType type) {
   if (!check(type))
     return false;
@@ -200,6 +214,19 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
   emitByte(byte2);
 }
 
+/**
+ * \brief Emits an instruction that takes an operand which is an offset. This
+ * instruction must have two versions, one for an 8-bit offset and the other
+ * for a 24-bit offset.
+ *
+ * The function receives both versions of the instruction and is able to
+ * determine which of them will be emitted based on the size of the offset.
+ *
+ * \param instruction Version of the instruction that takes an 8-bit offset
+ * \param instructionLong Version of the instruction that takes a 24-bit offset
+ * \param offset Offset operand
+ *
+ */
 static void emitOffsetOperandInstruction(const uint8_t instruction,
                                          const uint8_t instructionLong,
                                          const uint32_t offset) {
@@ -223,6 +250,15 @@ static void emitReturn() {
   emitByte(OP_RETURN);
 }
 
+/**
+ * \brief Adds a constant value to the chunk's constant array. The function will
+ * produce an error if there are too many constants in the array.
+ *
+ * \param value Constant value to be added
+ *
+ * \return Offset of the value in the constants array, if it was correctly
+ * added. 0 otherwise.
+ */
 static uint32_t makeConstant(const Value value) {
   uint32_t offset = addConstant(currentChunk(), value);
 
@@ -371,6 +407,14 @@ static void string(const bool canAssign) {
       copyString(parser.previous.start + 1, parser.previous.length - 2)));
 }
 
+/**
+ * \brief Takes a given token and creates a new global variable with its lexeme
+ * as an identifier
+ *
+ * \param name Identifier token
+ *
+ * \return Offset of the new identifier in the globalValues array
+ */
 static uint32_t identifierConstant(const Token* name) {
   ObjString* identifier = copyString(name->start, name->length);
 
@@ -396,6 +440,17 @@ static uint32_t identifierConstant(const Token* name) {
   return offset;
 }
 
+/**
+ * \brief Auxiliary function that parses an expression that uses an identifier.
+ *
+ * The function determines if the expression will be parsed as an assignment
+ * or as a usage of the variable based on the \p canAssign parameter.
+ *
+ * \param name Identifier token
+ * \param canAssign Boolean flag that indicates if the identifier has already
+ * been defined
+ *
+ */
 static void namedVariable(const Token name, const bool canAssign) {
   uint32_t offset = identifierConstant(&name);
 
@@ -409,6 +464,13 @@ static void namedVariable(const Token name, const bool canAssign) {
   }
 }
 
+/**
+ * \brief Function to parse an expression that uses an identifier.
+ *
+ * \param canAssign Boolean flag that indicates if the identifier has already
+ * been defined
+ *
+ */
 static void variable(const bool canAssign) {
   namedVariable(parser.previous, canAssign);
 }
@@ -513,20 +575,37 @@ static void parsePrecedence(Precedence precedence) {
   }
 }
 
+/**
+ * \brief Auxiliary function used to parse a variable and create it in memory.
+ *
+ * \param errorMessage Error message to be emitted if the variable can't be
+ * consumed
+ *
+ * \return The offset of the variable's value in the globalValues array
+ */
 static uint32_t parseVariable(const char* errorMessage) {
   consume(TOKEN_IDENTIFIER, errorMessage);
   return identifierConstant(&parser.previous);
 }
 
+/**
+ * \brief Emits the instruction to define a global variable, based on its offset
+ * in the globalValues array.
+ *
+ * \param globalOffset Offset of the variable in the globalValues array
+ *
+ */
 static void defineVariable(uint32_t globalOffset) {
   emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
                                globalOffset);
 }
 
 /**
- * \brief Obtains the parse rules for a token of a given type
+ * \brief Obtains the parse rules for a token of a given type.
  *
  * \param type Token type whose rules must be fetched
+ *
+ * \return A function pointer to the parse rule for the given type
  *
  */
 static ParseRule* getRule(TokenType type) {
@@ -541,6 +620,13 @@ static void expression() {
   parsePrecedence(PREC_ASSIGNMENT);
 }
 
+/**
+ * \brief Function used to parse a variable declaration.
+ *
+ * If the variable is not initialized in the declaration, it's value is set to
+ * nil.
+ *
+ */
 static void varDeclaration() {
   uint32_t globalOffset = parseVariable("Expect variable name.");
 
@@ -554,18 +640,36 @@ static void varDeclaration() {
   defineVariable(globalOffset);
 }
 
+/**
+ * \brief Function used to parse an expression statement
+ *
+ */
 static void expressionStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after expression");
   emitByte(OP_POP);
 }
 
+/**
+ * \brief Function used to parse a print statement.
+ *
+ * Prints in Lox are statements and not function calls.
+ *
+ */
 static void printStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after value");
   emitByte(OP_PRINT);
 }
 
+/**
+ * \brief Function used for error synchronization.
+ *
+ * The function will exit panic mode and consume tokens until it reaches a
+ * synchronization point. Statement boundaries are used as synchronization
+ * points.
+ *
+ */
 static void synchronize() {
   parser.panicMode = false;
 
@@ -591,6 +695,10 @@ static void synchronize() {
   }
 }
 
+/**
+ * \brief Function used to parse a declaration.
+ *
+ */
 static void declaration() {
   if (match(TOKEN_VAR)) {
     varDeclaration();
@@ -602,6 +710,10 @@ static void declaration() {
     synchronize();
 }
 
+/**
+ * \brief Function used to parse a statement. 
+ *
+ */
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();

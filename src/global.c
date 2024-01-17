@@ -1,3 +1,7 @@
+/*! \file global.c
+    \brief Definitions of functions from global.h
+*/
+
 #include "global.h"
 #include "memory.h"
 
