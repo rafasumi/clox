@@ -4,6 +4,7 @@
 
 #include "debug.h"
 #include "value.h"
+#include "vm.h"
 
 void disassembleChunk(const Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
@@ -48,18 +49,6 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
   return offset + 2;
 }
 
-static size_t globalOffsetInstruction(const char* name, const size_t offset) {
-  printf("%-16s %4ld\n", name, offset);
-
-  return offset + 2;
-}
-
-static size_t globalLongOffsetInstruction(const char* name, const size_t offset) {
-  printf("%-16s %4ld\n", name, offset);
-
-  return offset + 4;
-}
-
 /**
  * \brief Display an OP_CONSTANT_LONG instruction at a given offset. This
  * instruction has three 8-bit operands.
@@ -78,6 +67,28 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   printf("%-16s %4d '", name, constantOffset);
 
   printValue(chunk->constants.values[constantOffset]);
+  printf("'\n");
+
+  return offset + 4;
+}
+
+static size_t globalOffsetInstruction(const char* name, const Chunk* chunk, const size_t offset) {
+  uint8_t globalOffset = chunk->code[offset + 1];
+
+  printf("%-16s %4d '", name, globalOffset);
+  printValue(vm.globalValues.vars[globalOffset].value);
+  printf("'\n");
+
+  return offset + 2;
+}
+
+static size_t globalLongOffsetInstruction(const char* name, const Chunk* chunk, const size_t offset) {
+  uint32_t globalOffset = (chunk->code[offset + 3] << 16) |
+                            (chunk->code[offset + 2] << 8) |
+                            chunk->code[offset + 1];
+
+  printf("%-16s %4d '", name, globalOffset);
+  printValue(vm.globalValues.vars[globalOffset].value);
   printf("'\n");
 
   return offset + 4;
@@ -109,17 +120,17 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
   case OP_POP:
     return simpleInstruction("OP_POP", offset);
   case OP_GET_GLOBAL:
-    return globalOffsetInstruction("OP_GET_GLOBAL", offset);
+    return globalOffsetInstruction("OP_GET_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_GET_GLOBAL_LONG", offset);
+    return globalLongOffsetInstruction("OP_GET_GLOBAL_LONG", chunk, offset);
   case OP_DEFINE_GLOBAL:
-    return globalOffsetInstruction("OP_DEFINE_GLOBAL", offset);
+    return globalOffsetInstruction("OP_DEFINE_GLOBAL", chunk, offset);
   case OP_DEFINE_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_DEFINE_GLOBAL_LONG", offset);
+    return globalLongOffsetInstruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
   case OP_SET_GLOBAL:
-    return globalOffsetInstruction("OP_SET_GLOBAL", offset);
+    return globalOffsetInstruction("OP_SET_GLOBAL", chunk, offset);
   case OP_SET_GLOBAL_LONG:
-    return globalLongOffsetInstruction("OP_SET_GLOBAL_LONG", offset);
+    return globalLongOffsetInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
