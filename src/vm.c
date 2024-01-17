@@ -47,10 +47,14 @@ static void runtimeError(const char* format, ...) {
 void initVM() {
   resetStack();
   vm.objects = NULL;
+  initTable(&vm.globalNames);
+  initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
 }
 
 void freeVM() {
+  freeTable(&vm.globalNames);
+  freeGlobalVarArray(&vm.globalValues);
   freeTable(&vm.strings);
   freeObjects();
 }
@@ -111,13 +115,69 @@ static void concatenate() {
 }
 
 /**
+ * \brief Auxiliary function that gets the value of global variable based on its
+ * offset in the globalValues array. The value is pushed to the stack.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors when fetching
+ * the variable
+ *
+ */
+static bool getGlobal(const uint32_t offset) {
+  GlobalVar var = vm.globalValues.vars[offset];
+
+  if (IS_UNDEFINED(var.value)) {
+    runtimeError("Undefined variable '%s'.", var.identifier->chars);
+    return false;
+  }
+
+  push(var.value);
+  return true;
+}
+
+/**
+ * \brief Auxiliary function that defines a global variable by setting its
+ * value.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ */
+static void defineGlobal(const uint32_t offset) {
+  vm.globalValues.vars[offset].value = pop();
+}
+
+/**
+ * \brief Auxiliary function that sets the value of a global variable only if it
+ * has already been defined.
+ *
+ * \param offset The offset of the variable in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
+static bool setGlobal(const uint32_t offset) {
+  GlobalVar* var = vm.globalValues.vars + offset;
+
+  if (IS_UNDEFINED(var->value)) {
+    runtimeError("Undefined variable '%s'.", var->identifier->chars);
+    return false;
+  }
+
+  var->value = peek(0);
+  return true;
+}
+
+/**
  * \brief Helper function that runs the instructions in the VM.
  *
  * \return Result of the interpretation process
  */
 static InterpretResult run() {
-// Read a single bytecode from the VM and updates the instruction pointer
+// Read a single bytecode from the chunk and updates the instruction pointer
 #define READ_BYTE() (*(vm.ip++))
+
+// Read a 24-bit (or 3 bytes) operand from the chunk
+#define READ_LONG_OPERAND()                                                    \
+  READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
@@ -125,9 +185,13 @@ static InterpretResult run() {
 
 // Read a constant from the chunk based on the 24-bit offset at the bytecode
 // array
-#define READ_CONSTANT_LONG()                                                   \
-  (vm.chunk->constants                                                         \
-       .values[READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)])
+#define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_LONG_OPERAND()])
+
+// Read a string from the constants array with an 8-bit offset
+#define READ_STRING() AS_STRING(READ_CONSTANT())
+
+// Read a string from the constants array with a 24-bit offset
+#define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
 
 // Apply a binary operation based on the two next values at stack and on the
 // type of the operands
@@ -180,6 +244,31 @@ static InterpretResult run() {
       break;
     case OP_FALSE:
       push(BOOL_VAL(false));
+      break;
+    case OP_POP:
+      pop();
+      break;
+    case OP_GET_GLOBAL:
+      if (!getGlobal(READ_BYTE()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_GET_GLOBAL_LONG:
+      if (!getGlobal(READ_LONG_OPERAND()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_DEFINE_GLOBAL:
+      defineGlobal(READ_BYTE());
+      break;
+    case OP_DEFINE_GLOBAL_LONG:
+      defineGlobal(READ_LONG_OPERAND());
+      break;
+    case OP_SET_GLOBAL:
+      if (!setGlobal(READ_BYTE()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_SET_GLOBAL_LONG:
+      if (!setGlobal(READ_LONG_OPERAND()))
+        return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
@@ -238,9 +327,13 @@ static InterpretResult run() {
     case OP_DIVIDE:
       BINARY_OP(NUMBER_VAL, /);
       break;
-    case OP_RETURN:
+    case OP_PRINT: {
       printValue(pop());
       printf("\n");
+      break;
+    }
+    case OP_RETURN:
+      // Exit the interpreter
       return INTERPRET_OK;
     default:
       break;
@@ -248,8 +341,11 @@ static InterpretResult run() {
   }
 
 #undef READ_BYTE
+#undef READ_LONG_OPERAND
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
+#undef READ_STRING
+#undef READ_STRING_LONG
 #undef BINARY_OP
 }
 

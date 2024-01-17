@@ -4,6 +4,7 @@
 
 #include "debug.h"
 #include "value.h"
+#include "vm.h"
 
 void disassembleChunk(const Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
@@ -30,9 +31,10 @@ static size_t simpleInstruction(const char* name, const size_t offset) {
 
 /**
  * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
- * has one 8-bit operand
+ * has one 8-bit operand.
  *
  * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
  * \param offset Offset of the instruction within the bytecode array
  *
  * \return Offset of the next instruction
@@ -53,6 +55,7 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
  * instruction has three 8-bit operands.
  *
  * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
  * \param offset Offset of the instruction within the bytecode array
  *
  * \return Offset of the next instruction
@@ -66,6 +69,50 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   printf("%-16s %4d '", name, constantOffset);
 
   printValue(chunk->constants.values[constantOffset]);
+  printf("'\n");
+
+  return offset + 4;
+}
+
+/**
+ * \brief Display an instruction which handles global variables. This
+ * instruction has one 8-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t globalInstruction(const char* name, const Chunk* chunk,
+                                const size_t offset) {
+  uint8_t globalOffset = chunk->code[offset + 1];
+
+  printf("%-16s %4d '", name, globalOffset);
+  printValue(vm.globalValues.vars[globalOffset].value);
+  printf("'\n");
+
+  return offset + 2;
+}
+
+/**
+ * \brief Display an instruction which handles global variables. This
+ * instruction has three 8-bit operands.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t globalLongInstruction(const char* name, const Chunk* chunk,
+                                    const size_t offset) {
+  uint32_t globalOffset = (chunk->code[offset + 3] << 16) |
+                          (chunk->code[offset + 2] << 8) |
+                          chunk->code[offset + 1];
+
+  printf("%-16s %4d '", name, globalOffset);
+  printValue(vm.globalValues.vars[globalOffset].value);
   printf("'\n");
 
   return offset + 4;
@@ -94,6 +141,20 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_TRUE", offset);
   case OP_FALSE:
     return simpleInstruction("OP_FALSE", offset);
+  case OP_POP:
+    return simpleInstruction("OP_POP", offset);
+  case OP_GET_GLOBAL:
+    return globalInstruction("OP_GET_GLOBAL", chunk, offset);
+  case OP_GET_GLOBAL_LONG:
+    return globalLongInstruction("OP_GET_GLOBAL_LONG", chunk, offset);
+  case OP_DEFINE_GLOBAL:
+    return globalInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+  case OP_DEFINE_GLOBAL_LONG:
+    return globalLongInstruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
+  case OP_SET_GLOBAL:
+    return globalInstruction("OP_SET_GLOBAL", chunk, offset);
+  case OP_SET_GLOBAL_LONG:
+    return globalLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
@@ -118,6 +179,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_MULTIPLY", offset);
   case OP_DIVIDE:
     return simpleInstruction("OP_DIVIDE", offset);
+  case OP_PRINT:
+    return simpleInstruction("OP_PRINT", offset);
   case OP_RETURN:
     return simpleInstruction("OP_RETURN", offset);
   default:
