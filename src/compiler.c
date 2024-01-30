@@ -9,6 +9,7 @@
 #include "scanner.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef DEBUG
 #include "debug.h"
@@ -67,8 +68,20 @@ typedef struct {
                             specified token as an operator */
 } ParseRule;
 
+typedef struct {
+  Token name;
+  int32_t depth;
+} Local;
+
+typedef struct {
+  Local locals[UINT16_COUNT];
+  uint32_t localCount;
+  int32_t scopeDepth;
+} Compiler;
+
 // --------- Module variables ---------
 Parser parser;
+Compiler* current = NULL;
 Chunk* compilingChunk;
 // ------------------------------------
 
@@ -228,14 +241,17 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
  *
  */
 static void emitOffsetOperandInstruction(const uint8_t instruction,
-                                         const uint8_t instructionLong,
                                          const uint32_t offset) {
   if (offset <= UINT8_MAX) {
     emitBytes(instruction, (uint8_t)offset);
   } else {
     // Can safely assume that the offset is a 24-bit integer if it is greater
-    // than UINT8_MAX
-    emitByte(instructionLong);
+    // than UINT8_MAX, as this must be checked by the caller
+    
+    // This is a bit a of a hack, as the long version of an instruction will
+    // always be the next enum type in the OpCode Enum
+    emitByte(instruction + 1);
+    
     emitByte((uint8_t)(offset & UINT8_MAX));
     emitByte((uint8_t)((offset >> 8) & UINT8_MAX));
     emitByte((uint8_t)((offset >> 16) & UINT8_MAX));
@@ -283,7 +299,13 @@ static uint32_t makeConstant(const Value value) {
 static void emitConstant(const Value value) {
   uint32_t offset = makeConstant(value);
 
-  emitOffsetOperandInstruction(OP_CONSTANT, OP_CONSTANT_LONG, offset);
+  emitOffsetOperandInstruction(OP_CONSTANT, offset);
+}
+
+static void initCompiler(Compiler* compiler) {
+  compiler->localCount = 0;
+  compiler->scopeDepth = 0;
+  current = compiler;
 }
 
 /**
@@ -299,6 +321,20 @@ static void endCompiler() {
     disassembleChunk(currentChunk(), "code");
   }
 #endif
+}
+
+static void beginScope() {
+  current->scopeDepth++;
+}
+
+static void endScope() {
+  current->scopeDepth--;
+
+  while (current->localCount > 0 &&
+         current->locals[current->localCount - 1].depth > current->scopeDepth) {
+    emitByte(OP_POP);
+    current->localCount--;
+  }
 }
 
 // --------- Forward declarations ---------
@@ -440,6 +476,56 @@ static uint32_t identifierConstant(const Token* name) {
   return offset;
 }
 
+static bool identifiersEqual(const Token* a, const Token* b) {
+  if (a->length != b->length)
+    return false;
+
+  return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static uint32_t resolveLocal(Compiler* compiler, const Token* name) {
+  for (int i = compiler->localCount - 1; i >= 0; --i) {
+    Local* local = &compiler->locals[i];
+    if (identifiersEqual(name, &local->name)) {
+      if (local->depth == -1)
+        error("Can't read local variable in its own initializer.");
+
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+static void addLocal(const Token name) {
+  if (current->localCount == UINT16_COUNT) {
+    error("Too many variables in function.");
+    return;
+  }
+
+  Local* local = &current->locals[current->localCount++];
+  local->name = name;
+  local->depth = -1;
+}
+
+static void declareVariable() {
+  // Doesn't do anything for the top-level global scope
+  if (current->scopeDepth == 0)
+    return;
+
+  Token* name = &parser.previous;
+  for (int i = current->localCount - 1; i >= 0; --i) {
+    Local* local = &current->locals[i];
+    if (local->depth != -1 && local->depth < current->scopeDepth)
+      break;
+
+    if (identifiersEqual(name, &local->name))
+      error("Already a variable with this name in this scope");
+  }
+
+  addLocal(*name);
+}
+
 /**
  * \brief Auxiliary function that parses an expression that uses an identifier.
  *
@@ -452,15 +538,25 @@ static uint32_t identifierConstant(const Token* name) {
  *
  */
 static void namedVariable(const Token name, const bool canAssign) {
-  uint32_t offset = identifierConstant(&name);
+  uint8_t getOp, setOp;
+  int32_t arg = resolveLocal(current, &name);
+  if (arg != -1) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+  } else {
+    arg = identifierConstant(&name);
+    getOp = OP_GET_GLOBAL;
+    setOp = OP_SET_GLOBAL;
+  }
 
   if (canAssign && match(TOKEN_EQUAL)) {
     // Assignment expression
 
     expression();
-    emitOffsetOperandInstruction(OP_SET_GLOBAL, OP_SET_GLOBAL_LONG, offset);
+
+    emitOffsetOperandInstruction(setOp, (uint32_t)arg);
   } else {
-    emitOffsetOperandInstruction(OP_GET_GLOBAL, OP_GET_GLOBAL_LONG, offset);
+    emitOffsetOperandInstruction(getOp, (uint32_t)arg);
   }
 }
 
@@ -585,7 +681,17 @@ static void parsePrecedence(Precedence precedence) {
  */
 static uint32_t parseVariable(const char* errorMessage) {
   consume(TOKEN_IDENTIFIER, errorMessage);
+
+  declareVariable();
+
+  if (current->scopeDepth > 0)
+    return 0;
+
   return identifierConstant(&parser.previous);
+}
+
+static void markInitialized() {
+  current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
 /**
@@ -596,8 +702,12 @@ static uint32_t parseVariable(const char* errorMessage) {
  *
  */
 static void defineVariable(uint32_t globalOffset) {
-  emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
-                               globalOffset);
+  if (current->scopeDepth > 0) {
+    markInitialized();
+    return;
+  }
+
+  emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, globalOffset);
 }
 
 /**
@@ -618,6 +728,14 @@ static ParseRule* getRule(TokenType type) {
  */
 static void expression() {
   parsePrecedence(PREC_ASSIGNMENT);
+}
+
+static void block() {
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    declaration();
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
 /**
@@ -711,12 +829,16 @@ static void declaration() {
 }
 
 /**
- * \brief Function used to parse a statement. 
+ * \brief Function used to parse a statement.
  *
  */
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    beginScope();
+    block();
+    endScope();
   } else {
     expressionStatement();
   }
@@ -724,6 +846,9 @@ static void statement() {
 
 bool compile(const char* source, Chunk* chunk) {
   initScanner(source);
+
+  Compiler compiler;
+  initCompiler(&compiler);
 
   compilingChunk = chunk;
 

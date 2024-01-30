@@ -16,6 +16,8 @@
  */
 #define UINT24_MAX (UINT32_MAX >> 8)
 
+#define UINT16_COUNT (UINT16_MAX + 1)
+
 /**
  * \def eprintf(...)
  * \brief Wrapper macro to print something to stderr.

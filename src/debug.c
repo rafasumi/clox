@@ -29,6 +29,23 @@ static size_t simpleInstruction(const char* name, const size_t offset) {
   return offset + 1;
 }
 
+static size_t byteInstruction(const char* name, const Chunk* chunk,
+                              const size_t offset) {
+  uint8_t slot = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, slot);
+
+  return offset + 2;
+}
+
+static size_t byteLongInstruction(const char* name, const Chunk* chunk,
+                                  const size_t offset) {
+  uint32_t slot = (chunk->code[offset + 3] << 16) |
+                  (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, slot);
+
+  return offset + 4;
+}
+
 /**
  * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
  * has one 8-bit operand.
@@ -143,6 +160,14 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_FALSE", offset);
   case OP_POP:
     return simpleInstruction("OP_POP", offset);
+  case OP_GET_LOCAL:
+    return byteInstruction("OP_GET_LOCAL", chunk, offset);
+  case OP_GET_LOCAL_LONG:
+    return byteLongInstruction("OP_GET_LOCAL_LONG", chunk, offset);
+  case OP_SET_LOCAL:
+    return byteInstruction("OP_GET_LOCAL", chunk, offset);
+  case OP_SET_LOCAL_LONG:
+    return byteLongInstruction("OP_SET_LOCAL_LONG", chunk, offset);
   case OP_GET_GLOBAL:
     return globalInstruction("OP_GET_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL_LONG:

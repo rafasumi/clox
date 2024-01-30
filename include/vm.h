@@ -14,7 +14,7 @@
  * \def STACK_MAX
  * \brief Maximum size of the value stack.
  */
-#define STACK_MAX 256
+#define STACK_MAX UINT16_COUNT
 
 /**
  * \struct VM

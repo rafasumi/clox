@@ -20,6 +20,10 @@ typedef enum {
   OP_TRUE,          /**< Loads a true boolean value to the stack */
   OP_FALSE,         /**< Loads a false boolean value to the stack */
   OP_POP,           /**< Pops a value from the stack */
+  OP_GET_LOCAL,
+  OP_GET_LOCAL_LONG,
+  OP_SET_LOCAL,
+  OP_SET_LOCAL_LONG,
   OP_GET_GLOBAL, /**< Loads a global variable to the stack with an 8-bit offset
                   */
   OP_GET_GLOBAL_LONG, /**< Loads a global variable to the stack with a 24-bit
