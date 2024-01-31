@@ -1,0 +1,2 @@
+const a = 10;
+a = 15; // [line 2] Error at '=': Can't assign to constant variable

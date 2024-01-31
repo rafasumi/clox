@@ -16,6 +16,7 @@
 typedef struct {
   ObjString* identifier; /**< The variable's identifier */
   Value value;           /**< The value of the variable */
+  bool isConst;
 } GlobalVar;
 
 /**
@@ -33,7 +34,8 @@ typedef struct {
  * \def UNDEFINED_GLOBAL(identifier)
  * \brief Helper that creates an uninitialized global variable
  */
-#define UNDEFINED_GLOBAL(identifier) ((GlobalVar){identifier, UNDEFINED_VAL})
+#define UNDEFINED_GLOBAL(identifier, isConst)                                  \
+  ((GlobalVar){identifier, UNDEFINED_VAL, isConst})
 
 /**
  * \brief Initializes the resources of a given global values array.

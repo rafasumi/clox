@@ -71,6 +71,7 @@ typedef struct {
 typedef struct {
   Token name;
   int32_t depth;
+  bool isConst;
 } Local;
 
 typedef struct {
@@ -247,11 +248,11 @@ static void emitOffsetOperandInstruction(const uint8_t instruction,
   } else {
     // Can safely assume that the offset is a 24-bit integer if it is greater
     // than UINT8_MAX, as this must be checked by the caller
-    
+
     // This is a bit a of a hack, as the long version of an instruction will
     // always be the next enum type in the OpCode Enum
     emitByte(instruction + 1);
-    
+
     emitByte((uint8_t)(offset & UINT8_MAX));
     emitByte((uint8_t)((offset >> 8) & UINT8_MAX));
     emitByte((uint8_t)((offset >> 16) & UINT8_MAX));
@@ -451,7 +452,7 @@ static void string(const bool canAssign) {
  *
  * \return Offset of the new identifier in the globalValues array
  */
-static uint32_t identifierConstant(const Token* name) {
+static uint32_t identifierConstant(const Token* name, bool* isConst) {
   ObjString* identifier = copyString(name->start, name->length);
 
   Value globalValuesOffset;
@@ -459,11 +460,14 @@ static uint32_t identifierConstant(const Token* name) {
     // The identifier has already been added to the globalValues array, so we
     // just return its offset
 
-    return (uint32_t)AS_NUMBER(globalValuesOffset);
+    uint32_t offset = (uint32_t)AS_NUMBER(globalValuesOffset);
+    *isConst = vm.globalValues.vars[offset].isConst;
+
+    return offset;
   }
 
   // Watch out for double free of identifier
-  writeGlobalVarArray(&vm.globalValues, UNDEFINED_GLOBAL(identifier));
+  writeGlobalVarArray(&vm.globalValues, UNDEFINED_GLOBAL(identifier, *isConst));
 
   if (vm.globalValues.count > UINT24_MAX) {
     error("Too many many defined identifiers");
@@ -483,12 +487,14 @@ static bool identifiersEqual(const Token* a, const Token* b) {
   return memcmp(a->start, b->start, a->length) == 0;
 }
 
-static uint32_t resolveLocal(Compiler* compiler, const Token* name) {
+static uint32_t resolveLocal(Compiler* compiler, const Token* name, bool* isConst) {
   for (int i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
       if (local->depth == -1)
         error("Can't read local variable in its own initializer.");
+
+      *isConst = local->isConst;
 
       return i;
     }
@@ -497,7 +503,7 @@ static uint32_t resolveLocal(Compiler* compiler, const Token* name) {
   return -1;
 }
 
-static void addLocal(const Token name) {
+static void addLocal(const Token name, bool isConst) {
   if (current->localCount == UINT16_COUNT) {
     error("Too many variables in function.");
     return;
@@ -506,9 +512,10 @@ static void addLocal(const Token name) {
   Local* local = &current->locals[current->localCount++];
   local->name = name;
   local->depth = -1;
+  local->isConst = isConst;
 }
 
-static void declareVariable() {
+static void declareVariable(bool isConst) {
   // Doesn't do anything for the top-level global scope
   if (current->scopeDepth == 0)
     return;
@@ -523,7 +530,7 @@ static void declareVariable() {
       error("Already a variable with this name in this scope");
   }
 
-  addLocal(*name);
+  addLocal(*name, isConst);
 }
 
 /**
@@ -539,18 +546,26 @@ static void declareVariable() {
  */
 static void namedVariable(const Token name, const bool canAssign) {
   uint8_t getOp, setOp;
-  int32_t arg = resolveLocal(current, &name);
+  bool isConst = false;
+
+  int32_t arg = resolveLocal(current, &name, &isConst);
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
   } else {
-    arg = identifierConstant(&name);
+    arg = identifierConstant(&name, &isConst);
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
   }
 
   if (canAssign && match(TOKEN_EQUAL)) {
     // Assignment expression
+
+    if (isConst) {
+      error("Can't assign to constant variable.");
+      return;
+    }
+
 
     expression();
 
@@ -620,6 +635,7 @@ ParseRule rules[] = {
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
     [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
@@ -679,15 +695,15 @@ static void parsePrecedence(Precedence precedence) {
  *
  * \return The offset of the variable's value in the globalValues array
  */
-static uint32_t parseVariable(const char* errorMessage) {
+static uint32_t parseVariable(const char* errorMessage, bool isConst) {
   consume(TOKEN_IDENTIFIER, errorMessage);
 
-  declareVariable();
+  declareVariable(isConst);
 
   if (current->scopeDepth > 0)
     return 0;
 
-  return identifierConstant(&parser.previous);
+  return identifierConstant(&parser.previous, &isConst);
 }
 
 static void markInitialized() {
@@ -745,12 +761,17 @@ static void block() {
  * nil.
  *
  */
-static void varDeclaration() {
-  uint32_t globalOffset = parseVariable("Expect variable name.");
+static void varDeclaration(bool isConst) {
+  uint32_t globalOffset = parseVariable("Expect variable name.", isConst);
 
   if (match(TOKEN_EQUAL)) {
     expression();
   } else {
+    if (isConst) {
+      error("Constant variable must be initialized at declaration.");
+      return;
+    }
+
     emitByte(OP_NIL);
   }
 
@@ -797,6 +818,7 @@ static void synchronize() {
 
     switch (parser.current.type) {
     case TOKEN_CLASS:
+    case TOKEN_CONST:
     case TOKEN_FUN:
     case TOKEN_VAR:
     case TOKEN_FOR:
@@ -818,8 +840,8 @@ static void synchronize() {
  *
  */
 static void declaration() {
-  if (match(TOKEN_VAR)) {
-    varDeclaration();
+  if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
+    varDeclaration(parser.previous.type == TOKEN_CONST);
   } else {
     statement();
   }
