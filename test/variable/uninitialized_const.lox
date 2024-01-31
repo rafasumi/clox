@@ -1,0 +1,2 @@
+const a; // [line 1] Error at 'a': Constant variable must be initialized at declaration.
+print a;

@@ -9,10 +9,14 @@
 #include "scanner.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef DEBUG
 #include "debug.h"
 #endif
+
+typedef uint8_t ConstFlag;
+#define CONST_UNKNOWN 2
 
 /**
  * \struct Parser
@@ -67,8 +71,29 @@ typedef struct {
                             specified token as an operator */
 } ParseRule;
 
+/**
+ * \struct Local
+ * \brief Strucure used to represent a local variable in memory
+ */
+typedef struct {
+  Token name;    /**< Name of the variable */
+  int32_t depth; /**< Scope depth of where the variable was declared */
+  bool isConst;  /**< Flag that indicates if it is a constant variable */
+} Local;
+
+/**
+ * \struct Compiler
+ * \brief Strucure used to store relevant state for the clox compiler
+ */
+typedef struct {
+  Local locals[UINT16_COUNT]; /**< Array used to store local variables */
+  uint32_t localCount; /**< Current number of local variables in locals */
+  int32_t scopeDepth;  /**< Scope depth of the code being compiled */
+} Compiler;
+
 // --------- Module variables ---------
 Parser parser;
+Compiler* current = NULL;
 Chunk* compilingChunk;
 // ------------------------------------
 
@@ -219,23 +244,28 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
  * instruction must have two versions, one for an 8-bit offset and the other
  * for a 24-bit offset.
  *
- * The function receives both versions of the instruction and is able to
- * determine which of them will be emitted based on the size of the offset.
+ * The function receives only the 8-bit version of the instruction and assumes
+ * that the 24-bit version will be the next instruction in the OpCode Enum.
+ *
+ * The function determines which version of the instruction to emit based on the
+ * size of the offset.
+ *
+ * It is assumed that the value of \p offset can fit in an 24-bit integer. Thus
+ * this condition must be checked by the caller.
  *
  * \param instruction Version of the instruction that takes an 8-bit offset
- * \param instructionLong Version of the instruction that takes a 24-bit offset
  * \param offset Offset operand
  *
  */
 static void emitOffsetOperandInstruction(const uint8_t instruction,
-                                         const uint8_t instructionLong,
                                          const uint32_t offset) {
   if (offset <= UINT8_MAX) {
     emitBytes(instruction, (uint8_t)offset);
   } else {
-    // Can safely assume that the offset is a 24-bit integer if it is greater
-    // than UINT8_MAX
-    emitByte(instructionLong);
+    // This is a bit a of a hack, as the long version of an instruction will
+    // always be the next enum type in the OpCode Enum
+    emitByte(instruction + 1);
+
     emitByte((uint8_t)(offset & UINT8_MAX));
     emitByte((uint8_t)((offset >> 8) & UINT8_MAX));
     emitByte((uint8_t)((offset >> 16) & UINT8_MAX));
@@ -283,7 +313,18 @@ static uint32_t makeConstant(const Value value) {
 static void emitConstant(const Value value) {
   uint32_t offset = makeConstant(value);
 
-  emitOffsetOperandInstruction(OP_CONSTANT, OP_CONSTANT_LONG, offset);
+  emitOffsetOperandInstruction(OP_CONSTANT, offset);
+}
+
+/**
+ * \brief Initializes the compiler's state.
+ *
+ * \param compiler Pointer to the compiler's state struct
+ */
+static void initCompiler(Compiler* compiler) {
+  compiler->localCount = 0;
+  compiler->scopeDepth = 0;
+  current = compiler;
 }
 
 /**
@@ -299,6 +340,30 @@ static void endCompiler() {
     disassembleChunk(currentChunk(), "code");
   }
 #endif
+}
+
+/**
+ * \brief Begin's a new scope level and updates the compiler's state
+ * accordingly.
+ *
+ */
+static void beginScope() {
+  current->scopeDepth++;
+}
+
+/**
+ * \brief Ends the current scope level, updates the compiler's state
+ * accordingly and emits the appropriate instructions.
+ *
+ */
+static void endScope() {
+  current->scopeDepth--;
+
+  while (current->localCount > 0 &&
+         current->locals[current->localCount - 1].depth > current->scopeDepth) {
+    emitByte(OP_POP);
+    current->localCount--;
+  }
 }
 
 // --------- Forward declarations ---------
@@ -409,13 +474,19 @@ static void string(const bool canAssign) {
 
 /**
  * \brief Takes a given token and creates a new global variable with its lexeme
- * as an identifier
+ * as an identifier.
+ *
+ * If the global identifier has already been declared and the \p isConst flag is
+ * CONST_UNKOWN, the value of the flag is set to the same value as the
+ * variable's flag.
  *
  * \param name Identifier token
+ * \param isConst Pointer to a flag variable that indicates if the variable
+ * is a constant
  *
  * \return Offset of the new identifier in the globalValues array
  */
-static uint32_t identifierConstant(const Token* name) {
+static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
   ObjString* identifier = copyString(name->start, name->length);
 
   Value globalValuesOffset;
@@ -423,11 +494,23 @@ static uint32_t identifierConstant(const Token* name) {
     // The identifier has already been added to the globalValues array, so we
     // just return its offset
 
-    return (uint32_t)AS_NUMBER(globalValuesOffset);
+    uint32_t offset = (uint32_t)AS_NUMBER(globalValuesOffset);
+
+    if (*isConst == CONST_UNKNOWN) {
+      *isConst = (ConstFlag)vm.globalValues.vars[offset].isConst;
+    } else {
+      // A global identifier might change its constant modifier if it is
+      // redefined. Thus, we must update its state
+
+      vm.globalValues.vars[offset].isConst = (bool)(*isConst);
+    }
+
+    return offset;
   }
 
   // Watch out for double free of identifier
-  writeGlobalVarArray(&vm.globalValues, UNDEFINED_GLOBAL(identifier));
+  writeGlobalVarArray(&vm.globalValues,
+                      UNDEFINED_GLOBAL(identifier, (bool)(*isConst)));
 
   if (vm.globalValues.count > UINT24_MAX) {
     error("Too many many defined identifiers");
@@ -438,6 +521,98 @@ static uint32_t identifierConstant(const Token* name) {
   tableSet(&vm.globalNames, identifier, NUMBER_VAL((double)offset));
 
   return offset;
+}
+
+/**
+ * \brief Verifies if two Token identifiers are equal.
+ *
+ * \param a First identifier
+ * \param b Second identifier
+ *
+ * \return Boolean value that indicates whether both identifiers are equal
+ */
+static bool identifiersEqual(const Token* a, const Token* b) {
+  if (a->length != b->length)
+    return false;
+
+  return memcmp(a->start, b->start, a->length) == 0;
+}
+
+/**
+ * \brief Resolves and validates a local variable.
+ *
+ * The function will look for the given identifier in the locals array. If it is
+ * found and it doesn't use itself in its own initializer (meaning that it has
+ * already been initialized), the function succeeds.
+ *
+ * \param compiler Pointer to the compiler's state struct
+ * \param name Name of the local variable to be resolved
+ * \param isConst Pointer to a boolean flag that will be set if the variable is
+ * resolved
+ *
+ * \return Offset of the local variable in the locals array
+ */
+static uint32_t resolveLocal(Compiler* compiler, const Token* name,
+                             bool* isConst) {
+  for (int i = compiler->localCount - 1; i >= 0; --i) {
+    Local* local = &compiler->locals[i];
+    if (identifiersEqual(name, &local->name)) {
+      if (local->depth == -1)
+        error("Can't read local variable in its own initializer.");
+
+      *isConst = local->isConst;
+
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * \brief Adds a local variable to the locals array.
+ *
+ * \param name Name of the local variable to be added
+ * \param isConst Boolean flag that indicates if it is a constant variable
+ *
+ */
+static void addLocal(const Token name, const bool isConst) {
+  if (current->localCount == UINT16_COUNT) {
+    error("Too many variables in function.");
+    return;
+  }
+
+  Local* local = &current->locals[current->localCount++];
+  local->name = name;
+  local->depth = -1;
+  local->isConst = isConst;
+}
+
+/**
+ * \brief Declares a local variable.
+ *
+ * The declared variable cannot have the same name as another variable in the
+ * same scope. If it doesn't, the local variable is added to the locals array.
+ *
+ * \param isConst Boolean flag that indicates if it is a constant variable
+ *
+ */
+static void declareVariable(const bool isConst) {
+  // Doesn't do anything for the top-level global scope
+  if (current->scopeDepth == 0)
+    return;
+
+  Token* name = &parser.previous;
+  for (int i = current->localCount - 1; i >= 0; --i) {
+    Local* local = &current->locals[i];
+    if (local->depth != -1 && local->depth < current->scopeDepth)
+      break;
+
+    if (identifiersEqual(name, &local->name))
+      error("Already a variable with this name in this scope");
+  }
+
+  addLocal(*name, isConst);
 }
 
 /**
@@ -452,15 +627,37 @@ static uint32_t identifierConstant(const Token* name) {
  *
  */
 static void namedVariable(const Token name, const bool canAssign) {
-  uint32_t offset = identifierConstant(&name);
+  uint8_t getOp, setOp;
+  bool isConst;
+
+  int32_t arg = resolveLocal(current, &name, &isConst);
+  if (arg != -1) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+  } else {
+    // If can't be resolved as a local, than it is resolved as a global
+
+    ConstFlag flag = CONST_UNKNOWN;
+    arg = identifierConstant(&name, &flag);
+    isConst = (bool)flag;
+
+    getOp = OP_GET_GLOBAL;
+    setOp = OP_SET_GLOBAL;
+  }
 
   if (canAssign && match(TOKEN_EQUAL)) {
     // Assignment expression
 
+    if (isConst) {
+      error("Can't assign to constant variable.");
+      return;
+    }
+
     expression();
-    emitOffsetOperandInstruction(OP_SET_GLOBAL, OP_SET_GLOBAL_LONG, offset);
+
+    emitOffsetOperandInstruction(setOp, (uint32_t)arg);
   } else {
-    emitOffsetOperandInstruction(OP_GET_GLOBAL, OP_GET_GLOBAL_LONG, offset);
+    emitOffsetOperandInstruction(getOp, (uint32_t)arg);
   }
 }
 
@@ -524,6 +721,7 @@ ParseRule rules[] = {
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
     [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
@@ -580,24 +778,51 @@ static void parsePrecedence(Precedence precedence) {
  *
  * \param errorMessage Error message to be emitted if the variable can't be
  * consumed
+ * \param isConst Boolean flag that indicates if the variable is a constant
  *
  * \return The offset of the variable's value in the globalValues array
  */
-static uint32_t parseVariable(const char* errorMessage) {
+static uint32_t parseVariable(const char* errorMessage, const bool isConst) {
   consume(TOKEN_IDENTIFIER, errorMessage);
-  return identifierConstant(&parser.previous);
+
+  declareVariable(isConst);
+
+  if (current->scopeDepth > 0)
+    return 0;
+
+  ConstFlag flag = (ConstFlag)isConst;
+  return identifierConstant(&parser.previous, &flag);
 }
 
 /**
- * \brief Emits the instruction to define a global variable, based on its offset
- * in the globalValues array.
+ * \brief Marks the last added variable in the locals array as initialized.
+ *
+ * This means that the scope depth of the variable is set to the current scope
+ * depth.
+ *
+ */
+static void markInitialized() {
+  current->locals[current->localCount - 1].depth = current->scopeDepth;
+}
+
+/**
+ * \brief Defines a variable.
+ *
+ * If it is a global variable, then it Emits the instruction to define it based
+ * on its offset in the globalValues array.
+ *
+ * If it is a local variable, then it is marked as initialized.
  *
  * \param globalOffset Offset of the variable in the globalValues array
  *
  */
 static void defineVariable(uint32_t globalOffset) {
-  emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, OP_DEFINE_GLOBAL_LONG,
-                               globalOffset);
+  if (current->scopeDepth > 0) {
+    markInitialized();
+    return;
+  }
+
+  emitOffsetOperandInstruction(OP_DEFINE_GLOBAL, globalOffset);
 }
 
 /**
@@ -621,18 +846,37 @@ static void expression() {
 }
 
 /**
- * \brief Function used to parse a variable declaration.
- *
- * If the variable is not initialized in the declaration, it's value is set to
- * nil.
+ * \brief Parses a block of code surrounded by braces.
  *
  */
-static void varDeclaration() {
-  uint32_t globalOffset = parseVariable("Expect variable name.");
+static void block() {
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    declaration();
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+/**
+ * \brief Function used to parse a variable declaration.
+ *
+ * If the variable is not initialized in the declaration and it is not a
+ * constant, it's value is set to nil.
+ *
+ * Constant variables must be initialized in their declarations.
+ *
+ */
+static void varDeclaration(bool isConst) {
+  uint32_t globalOffset = parseVariable("Expect variable name.", isConst);
 
   if (match(TOKEN_EQUAL)) {
     expression();
   } else {
+    if (isConst) {
+      error("Constant variable must be initialized at declaration.");
+      return;
+    }
+
     emitByte(OP_NIL);
   }
 
@@ -679,6 +923,7 @@ static void synchronize() {
 
     switch (parser.current.type) {
     case TOKEN_CLASS:
+    case TOKEN_CONST:
     case TOKEN_FUN:
     case TOKEN_VAR:
     case TOKEN_FOR:
@@ -700,8 +945,8 @@ static void synchronize() {
  *
  */
 static void declaration() {
-  if (match(TOKEN_VAR)) {
-    varDeclaration();
+  if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
+    varDeclaration(parser.previous.type == TOKEN_CONST);
   } else {
     statement();
   }
@@ -711,12 +956,16 @@ static void declaration() {
 }
 
 /**
- * \brief Function used to parse a statement. 
+ * \brief Function used to parse a statement.
  *
  */
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    beginScope();
+    block();
+    endScope();
   } else {
     expressionStatement();
   }
@@ -724,6 +973,9 @@ static void statement() {
 
 bool compile(const char* source, Chunk* chunk) {
   initScanner(source);
+
+  Compiler compiler;
+  initCompiler(&compiler);
 
   compilingChunk = chunk;
 
