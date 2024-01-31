@@ -15,6 +15,9 @@
 #include "debug.h"
 #endif
 
+typedef uint8_t ConstFlag;
+#define CONST_UNKNOWN 2
+
 /**
  * \struct Parser
  * \brief Strucure that contains relevant data and flags to clox's parser
@@ -452,7 +455,7 @@ static void string(const bool canAssign) {
  *
  * \return Offset of the new identifier in the globalValues array
  */
-static uint32_t identifierConstant(const Token* name, bool* isConst) {
+static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
   ObjString* identifier = copyString(name->start, name->length);
 
   Value globalValuesOffset;
@@ -461,13 +464,22 @@ static uint32_t identifierConstant(const Token* name, bool* isConst) {
     // just return its offset
 
     uint32_t offset = (uint32_t)AS_NUMBER(globalValuesOffset);
-    *isConst = vm.globalValues.vars[offset].isConst;
+
+    if (*isConst == CONST_UNKNOWN) {
+      *isConst = (ConstFlag)vm.globalValues.vars[offset].isConst;
+    } else {
+      // A global identifier might change its constant modifier if it is
+      // redefined. Thus, we must update its state
+
+      vm.globalValues.vars[offset].isConst = (bool)(*isConst);
+    }
 
     return offset;
   }
 
   // Watch out for double free of identifier
-  writeGlobalVarArray(&vm.globalValues, UNDEFINED_GLOBAL(identifier, *isConst));
+  writeGlobalVarArray(&vm.globalValues,
+                      UNDEFINED_GLOBAL(identifier, (bool)(*isConst)));
 
   if (vm.globalValues.count > UINT24_MAX) {
     error("Too many many defined identifiers");
@@ -487,7 +499,8 @@ static bool identifiersEqual(const Token* a, const Token* b) {
   return memcmp(a->start, b->start, a->length) == 0;
 }
 
-static uint32_t resolveLocal(Compiler* compiler, const Token* name, bool* isConst) {
+static uint32_t resolveLocal(Compiler* compiler, const Token* name,
+                             bool* isConst) {
   for (int i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
@@ -546,14 +559,17 @@ static void declareVariable(bool isConst) {
  */
 static void namedVariable(const Token name, const bool canAssign) {
   uint8_t getOp, setOp;
-  bool isConst = false;
+  bool isConst;
 
   int32_t arg = resolveLocal(current, &name, &isConst);
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
   } else {
-    arg = identifierConstant(&name, &isConst);
+    ConstFlag flag = CONST_UNKNOWN;
+    arg = identifierConstant(&name, &flag);
+    isConst = (bool)flag;
+
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
   }
@@ -565,7 +581,6 @@ static void namedVariable(const Token name, const bool canAssign) {
       error("Can't assign to constant variable.");
       return;
     }
-
 
     expression();
 
@@ -703,7 +718,8 @@ static uint32_t parseVariable(const char* errorMessage, bool isConst) {
   if (current->scopeDepth > 0)
     return 0;
 
-  return identifierConstant(&parser.previous, &isConst);
+  ConstFlag flag = (ConstFlag)isConst;
+  return identifierConstant(&parser.previous, &flag);
 }
 
 static void markInitialized() {
