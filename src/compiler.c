@@ -71,16 +71,24 @@ typedef struct {
                             specified token as an operator */
 } ParseRule;
 
+/**
+ * \struct Local
+ * \brief Strucure used to represent a local variable in memory
+ */
 typedef struct {
-  Token name;
-  int32_t depth;
-  bool isConst;
+  Token name;    /**< Name of the variable */
+  int32_t depth; /**< Scope depth of where the variable was declared */
+  bool isConst;  /**< Flag that indicates if it is a constant variable */
 } Local;
 
+/**
+ * \struct Compiler
+ * \brief Strucure used to store relevant state for the clox compiler
+ */
 typedef struct {
-  Local locals[UINT16_COUNT];
-  uint32_t localCount;
-  int32_t scopeDepth;
+  Local locals[UINT16_COUNT]; /**< Array used to store local variables */
+  uint32_t localCount; /**< Current number of local variables in locals */
+  int32_t scopeDepth;  /**< Scope depth of the code being compiled */
 } Compiler;
 
 // --------- Module variables ---------
@@ -236,11 +244,16 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
  * instruction must have two versions, one for an 8-bit offset and the other
  * for a 24-bit offset.
  *
- * The function receives both versions of the instruction and is able to
- * determine which of them will be emitted based on the size of the offset.
+ * The function receives only the 8-bit version of the instruction and assumes
+ * that the 24-bit version will be the next instruction in the OpCode Enum.
+ *
+ * The function determines which version of the instruction to emit based on the
+ * size of the offset.
+ *
+ * It is assumed that the value of \p offset can fit in an 24-bit integer. Thus
+ * this condition must be checked by the caller.
  *
  * \param instruction Version of the instruction that takes an 8-bit offset
- * \param instructionLong Version of the instruction that takes a 24-bit offset
  * \param offset Offset operand
  *
  */
@@ -249,9 +262,6 @@ static void emitOffsetOperandInstruction(const uint8_t instruction,
   if (offset <= UINT8_MAX) {
     emitBytes(instruction, (uint8_t)offset);
   } else {
-    // Can safely assume that the offset is a 24-bit integer if it is greater
-    // than UINT8_MAX, as this must be checked by the caller
-
     // This is a bit a of a hack, as the long version of an instruction will
     // always be the next enum type in the OpCode Enum
     emitByte(instruction + 1);
@@ -306,6 +316,11 @@ static void emitConstant(const Value value) {
   emitOffsetOperandInstruction(OP_CONSTANT, offset);
 }
 
+/**
+ * \brief Initializes the compiler's state.
+ *
+ * \param compiler Pointer to the compiler's state struct
+ */
 static void initCompiler(Compiler* compiler) {
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
@@ -327,10 +342,20 @@ static void endCompiler() {
 #endif
 }
 
+/**
+ * \brief Begin's a new scope level and updates the compiler's state
+ * accordingly.
+ *
+ */
 static void beginScope() {
   current->scopeDepth++;
 }
 
+/**
+ * \brief Ends the current scope level, updates the compiler's state
+ * accordingly and emits the appropriate instructions.
+ *
+ */
 static void endScope() {
   current->scopeDepth--;
 
@@ -449,9 +474,15 @@ static void string(const bool canAssign) {
 
 /**
  * \brief Takes a given token and creates a new global variable with its lexeme
- * as an identifier
+ * as an identifier.
+ *
+ * If the global identifier has already been declared and the \p isConst flag is
+ * CONST_UNKOWN, the value of the flag is set to the same value as the
+ * variable's flag.
  *
  * \param name Identifier token
+ * \param isConst Pointer to a flag variable that indicates if the variable
+ * is a constant
  *
  * \return Offset of the new identifier in the globalValues array
  */
@@ -492,6 +523,14 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
   return offset;
 }
 
+/**
+ * \brief Verifies if two Token identifiers are equal.
+ *
+ * \param a First identifier
+ * \param b Second identifier
+ *
+ * \return Boolean value that indicates whether both identifiers are equal
+ */
 static bool identifiersEqual(const Token* a, const Token* b) {
   if (a->length != b->length)
     return false;
@@ -499,6 +538,20 @@ static bool identifiersEqual(const Token* a, const Token* b) {
   return memcmp(a->start, b->start, a->length) == 0;
 }
 
+/**
+ * \brief Resolves and validates a local variable.
+ *
+ * The function will look for the given identifier in the locals array. If it is
+ * found and it doesn't use itself in its own initializer (meaning that it has
+ * already been initialized), the function succeeds.
+ *
+ * \param compiler Pointer to the compiler's state struct
+ * \param name Name of the local variable to be resolved
+ * \param isConst Pointer to a boolean flag that will be set if the variable is
+ * resolved
+ *
+ * \return Offset of the local variable in the locals array
+ */
 static uint32_t resolveLocal(Compiler* compiler, const Token* name,
                              bool* isConst) {
   for (int i = compiler->localCount - 1; i >= 0; --i) {
@@ -516,7 +569,14 @@ static uint32_t resolveLocal(Compiler* compiler, const Token* name,
   return -1;
 }
 
-static void addLocal(const Token name, bool isConst) {
+/**
+ * \brief Adds a local variable to the locals array.
+ *
+ * \param name Name of the local variable to be added
+ * \param isConst Boolean flag that indicates if it is a constant variable
+ *
+ */
+static void addLocal(const Token name, const bool isConst) {
   if (current->localCount == UINT16_COUNT) {
     error("Too many variables in function.");
     return;
@@ -528,7 +588,16 @@ static void addLocal(const Token name, bool isConst) {
   local->isConst = isConst;
 }
 
-static void declareVariable(bool isConst) {
+/**
+ * \brief Declares a local variable.
+ *
+ * The declared variable cannot have the same name as another variable in the
+ * same scope. If it doesn't, the local variable is added to the locals array.
+ *
+ * \param isConst Boolean flag that indicates if it is a constant variable
+ *
+ */
+static void declareVariable(const bool isConst) {
   // Doesn't do anything for the top-level global scope
   if (current->scopeDepth == 0)
     return;
@@ -566,6 +635,8 @@ static void namedVariable(const Token name, const bool canAssign) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
   } else {
+    // If can't be resolved as a local, than it is resolved as a global
+
     ConstFlag flag = CONST_UNKNOWN;
     arg = identifierConstant(&name, &flag);
     isConst = (bool)flag;
@@ -707,10 +778,11 @@ static void parsePrecedence(Precedence precedence) {
  *
  * \param errorMessage Error message to be emitted if the variable can't be
  * consumed
+ * \param isConst Boolean flag that indicates if the variable is a constant
  *
  * \return The offset of the variable's value in the globalValues array
  */
-static uint32_t parseVariable(const char* errorMessage, bool isConst) {
+static uint32_t parseVariable(const char* errorMessage, const bool isConst) {
   consume(TOKEN_IDENTIFIER, errorMessage);
 
   declareVariable(isConst);
@@ -722,13 +794,24 @@ static uint32_t parseVariable(const char* errorMessage, bool isConst) {
   return identifierConstant(&parser.previous, &flag);
 }
 
+/**
+ * \brief Marks the last added variable in the locals array as initialized.
+ *
+ * This means that the scope depth of the variable is set to the current scope
+ * depth.
+ *
+ */
 static void markInitialized() {
   current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
 /**
- * \brief Emits the instruction to define a global variable, based on its offset
- * in the globalValues array.
+ * \brief Defines a variable.
+ *
+ * If it is a global variable, then it Emits the instruction to define it based
+ * on its offset in the globalValues array.
+ *
+ * If it is a local variable, then it is marked as initialized.
  *
  * \param globalOffset Offset of the variable in the globalValues array
  *
@@ -762,6 +845,10 @@ static void expression() {
   parsePrecedence(PREC_ASSIGNMENT);
 }
 
+/**
+ * \brief Parses a block of code surrounded by braces.
+ *
+ */
 static void block() {
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     declaration();
@@ -773,8 +860,10 @@ static void block() {
 /**
  * \brief Function used to parse a variable declaration.
  *
- * If the variable is not initialized in the declaration, it's value is set to
- * nil.
+ * If the variable is not initialized in the declaration and it is not a
+ * constant, it's value is set to nil.
+ *
+ * Constant variables must be initialized in their declarations.
  *
  */
 static void varDeclaration(bool isConst) {

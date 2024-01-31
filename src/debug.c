@@ -29,6 +29,16 @@ static size_t simpleInstruction(const char* name, const size_t offset) {
   return offset + 1;
 }
 
+/**
+ * \brief Display an instruction at a given offset along with the instruction's
+ * 8-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t byteInstruction(const char* name, const Chunk* chunk,
                               const size_t offset) {
   uint8_t slot = chunk->code[offset + 1];
@@ -37,6 +47,16 @@ static size_t byteInstruction(const char* name, const Chunk* chunk,
   return offset + 2;
 }
 
+/**
+ * \brief Display an instruction at a given offset along with the instruction's
+ * 24-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t byteLongInstruction(const char* name, const Chunk* chunk,
                                   const size_t offset) {
   uint32_t slot = (chunk->code[offset + 3] << 16) |
