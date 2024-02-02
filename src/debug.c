@@ -66,6 +66,15 @@ static size_t byteLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+static size_t jumpInstruction(const char* name, const uint8_t sign,
+                              const Chunk* chunk, const size_t offset) {
+  uint16_t jump =
+      (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 1]);
+  printf("%-16s %4ld -> %ld\n", name, offset, offset + 3 + sign * jump);
+
+  return offset + 3;
+}
+
 /**
  * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
  * has one 8-bit operand.
@@ -226,6 +235,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_DIVIDE", offset);
   case OP_PRINT:
     return simpleInstruction("OP_PRINT", offset);
+  case OP_JUMP:
+    return jumpInstruction("OP_JUMP", 1, chunk, offset);
+  case OP_JUMP_IF_FALSE:
+    return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
   case OP_RETURN:
     return simpleInstruction("OP_RETURN", offset);
   default:

@@ -239,6 +239,17 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
   emitByte(byte2);
 }
 
+static int32_t emitJump(uint8_t instruction) {
+  emitByte(instruction);
+  
+  // Placeholder bytes for backpatching
+  emitByte(UINT8_MAX);
+  emitByte(UINT8_MAX);
+  
+  // Returns the offset of the emitted instruction in the chunk
+  return currentChunk()->count - 2;
+}
+
 /**
  * \brief Emits an instruction that takes an operand which is an offset. This
  * instruction must have two versions, one for an 8-bit offset and the other
@@ -314,6 +325,18 @@ static void emitConstant(const Value value) {
   uint32_t offset = makeConstant(value);
 
   emitOffsetOperandInstruction(OP_CONSTANT, offset);
+}
+
+static void patchJump(int32_t offset) {
+  // -2 to adjust for the bytecode of the jump offset itself
+  int32_t jump = currentChunk()->count - offset - 2;
+
+  if (jump > UINT16_MAX) {
+    error("Too much code to jump over.");
+  }
+
+  currentChunk()->code[offset] = jump & UINT8_MAX;
+  currentChunk()->code[offset + 1] = (jump >> 8) & UINT8_MAX;
 }
 
 /**
@@ -894,6 +917,25 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  int thenJump = emitJump(OP_JUMP_IF_FALSE);
+  
+  emitByte(OP_POP); // Pop the condition value from the stack
+  statement();
+  int elseJump = emitJump(OP_JUMP);
+
+  patchJump(thenJump);
+
+  emitByte(OP_POP); // Pop the condition value from the stack
+  if (match(TOKEN_ELSE))
+    statement();
+  patchJump(elseJump);
+}
+
 /**
  * \brief Function used to parse a print statement.
  *
@@ -962,6 +1004,8 @@ static void declaration() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();

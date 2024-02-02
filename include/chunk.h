@@ -57,6 +57,8 @@ typedef enum {
   OP_MULTIPLY, /**< Multiplies the next two values in the stack */
   OP_DIVIDE,   /**< Divides the next two values in the stack */
   OP_PRINT,
+  OP_JUMP,
+  OP_JUMP_IF_FALSE,
   OP_RETURN /**< Returns from the current function */
 } OpCode;
 
