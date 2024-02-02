@@ -241,11 +241,11 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
 
 static int32_t emitJump(uint8_t instruction) {
   emitByte(instruction);
-  
+
   // Placeholder bytes for backpatching
   emitByte(UINT8_MAX);
   emitByte(UINT8_MAX);
-  
+
   // Returns the offset of the emitted instruction in the chunk
   return currentChunk()->count - 2;
 }
@@ -486,6 +486,32 @@ static void number(const bool canAssign) {
   emitConstant(NUMBER_VAL(value));
 }
 
+static void and_(const bool canAssign) {
+  // Doesn't have to evaluate the rest if the left-hand side is falsey
+  int32_t endJump = emitJump(OP_JUMP_IF_FALSE);
+
+  emitByte(OP_POP); // Pops the value of the left-hand side expression
+  parsePrecedence(PREC_AND);
+
+  patchJump(endJump);
+}
+
+static void or_(const bool canAssign) {
+  // Jumps the unconditional jump
+  int32_t elseJump = emitJump(OP_JUMP_IF_FALSE);
+
+  // We don't evaluate the rest if the left-hand side is truthy
+  int32_t endJump = emitJump(OP_JUMP);
+
+  patchJump(elseJump);
+
+  // Pops the value of the left-hand side expression
+  emitByte(OP_POP);
+
+  parsePrecedence(PREC_OR);
+  patchJump(endJump);
+}
+
 /**
  * \brief Function to parse a string expression
  *
@@ -577,7 +603,7 @@ static bool identifiersEqual(const Token* a, const Token* b) {
  */
 static uint32_t resolveLocal(Compiler* compiler, const Token* name,
                              bool* isConst) {
-  for (int i = compiler->localCount - 1; i >= 0; --i) {
+  for (int32_t i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
       if (local->depth == -1)
@@ -626,7 +652,7 @@ static void declareVariable(const bool isConst) {
     return;
 
   Token* name = &parser.previous;
-  for (int i = current->localCount - 1; i >= 0; --i) {
+  for (int32_t i = current->localCount - 1; i >= 0; --i) {
     Local* local = &current->locals[i];
     if (local->depth != -1 && local->depth < current->scopeDepth)
       break;
@@ -742,7 +768,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
@@ -751,7 +777,7 @@ ParseRule rules[] = {
     [TOKEN_FUN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NIL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
@@ -922,11 +948,11 @@ static void ifStatement() {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
-  int thenJump = emitJump(OP_JUMP_IF_FALSE);
-  
+  int32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+
   emitByte(OP_POP); // Pop the condition value from the stack
   statement();
-  int elseJump = emitJump(OP_JUMP);
+  int32_t elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
 
