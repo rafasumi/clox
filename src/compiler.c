@@ -239,7 +239,18 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
   emitByte(byte2);
 }
 
-static int32_t emitJump(uint8_t instruction) {
+static void emitLoop(const uint32_t loopStart) {
+  emitByte(OP_LOOP);
+
+  int32_t offset = currentChunk()->count - loopStart + 2;
+  if (offset > UINT16_MAX)
+    error("Loop body too large.");
+  
+  emitByte(offset & UINT8_MAX);
+  emitByte((offset >> 8) & UINT16_MAX);
+}
+
+static int32_t emitJump(const uint8_t instruction) {
   emitByte(instruction);
 
   // Placeholder bytes for backpatching
@@ -950,6 +961,54 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+static void forStatement() {
+  beginScope();
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+
+  if (match(TOKEN_SEMICOLON)) {
+    // No initializer
+  } else if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
+    varDeclaration(parser.previous.type == TOKEN_CONST);
+  } else {
+    expressionStatement();
+  }
+
+  int32_t loopStart = currentChunk()->count;
+  int32_t exitJump = -1;
+  if (!match(TOKEN_SEMICOLON)) {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+
+    // Jump out of the loop if the condition is false
+    exitJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP); // Pop the condition value
+  }
+
+  if (!match(TOKEN_RIGHT_PAREN)) {
+    int32_t bodyJump = emitJump(OP_JUMP);
+    int32_t incrementStart = currentChunk()->count;
+
+    expression();
+    emitByte(OP_POP); // Pop the result of the increment expression
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    emitLoop(loopStart);
+    loopStart = incrementStart;
+    patchJump(bodyJump);
+  }
+
+
+  statement();
+  emitLoop(loopStart);
+
+  if (exitJump != -1) {
+    patchJump(exitJump);
+    emitByte(OP_POP); // Pop the condition value
+  }
+
+  endScope();
+}
+
 static void ifStatement() {
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
   expression();
@@ -979,6 +1038,21 @@ static void printStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after value");
   emitByte(OP_PRINT);
+}
+
+static void whileStatement() {
+  uint32_t loopStart = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'condition'.");
+
+  int32_t exitJump = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP); // Pop condition value in the loop path
+  statement();
+  emitLoop(loopStart);
+
+  patchJump(exitJump);
+  emitByte(OP_POP); // Pop condition value in the exit path
 }
 
 /**
@@ -1037,8 +1111,12 @@ static void declaration() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_FOR)) {
+    forStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
