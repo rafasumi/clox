@@ -546,8 +546,12 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
     uint32_t offset = (uint32_t)AS_NUMBER(globalValuesOffset);
 
     if (*isConst == CONST_UNKNOWN) {
+      // The global appears in an expression
+
       *isConst = (ConstFlag)vm.globalValues.vars[offset].isConst;
     } else {
+      // The global appears in an assignment
+
       // A global identifier might change its constant modifier if it is
       // redefined. Thus, we must update its state
 
@@ -557,6 +561,9 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
     return offset;
   }
 
+  // This line is needed in the case of an assignment to an undeclared global
+  *isConst = ((*isConst == CONST_UNKNOWN) ? false : *isConst); 
+  
   // Watch out for double free of identifier
   writeGlobalVarArray(&vm.globalValues,
                       UNDEFINED_GLOBAL(identifier, (bool)(*isConst)));
