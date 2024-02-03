@@ -245,7 +245,7 @@ static void emitLoop(const uint32_t loopStart) {
   int32_t offset = currentChunk()->count - loopStart + 2;
   if (offset > UINT16_MAX)
     error("Loop body too large.");
-  
+
   emitByte(offset & UINT8_MAX);
   emitByte((offset >> 8) & UINT16_MAX);
 }
@@ -499,7 +499,7 @@ static void number(const bool canAssign) {
 
 static void and_(const bool canAssign) {
   // Doesn't have to evaluate the rest if the left-hand side is falsey
-  int32_t endJump = emitJump(OP_JUMP_IF_FALSE);
+  int32_t endJump = emitJump(OP_JUMP_IF_FALSE_NP);
 
   emitByte(OP_POP); // Pops the value of the left-hand side expression
   parsePrecedence(PREC_AND);
@@ -509,7 +509,7 @@ static void and_(const bool canAssign) {
 
 static void or_(const bool canAssign) {
   // Jumps the unconditional jump
-  int32_t elseJump = emitJump(OP_JUMP_IF_FALSE);
+  int32_t elseJump = emitJump(OP_JUMP_IF_FALSE_NP);
 
   // We don't evaluate the rest if the left-hand side is truthy
   int32_t endJump = emitJump(OP_JUMP);
@@ -573,8 +573,8 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
   }
 
   // This line is needed in the case of an assignment to an undeclared global
-  *isConst = ((*isConst == CONST_UNKNOWN) ? false : *isConst); 
-  
+  *isConst = ((*isConst == CONST_UNKNOWN) ? false : *isConst);
+
   // Watch out for double free of identifier
   writeGlobalVarArray(&vm.globalValues,
                       UNDEFINED_GLOBAL(identifier, (bool)(*isConst)));
@@ -981,7 +981,6 @@ static void forStatement() {
 
     // Jump out of the loop if the condition is false
     exitJump = emitJump(OP_JUMP_IF_FALSE);
-    emitByte(OP_POP); // Pop the condition value
   }
 
   if (!match(TOKEN_RIGHT_PAREN)) {
@@ -997,13 +996,11 @@ static void forStatement() {
     patchJump(bodyJump);
   }
 
-
   statement();
   emitLoop(loopStart);
 
   if (exitJump != -1) {
     patchJump(exitJump);
-    emitByte(OP_POP); // Pop the condition value
   }
 
   endScope();
@@ -1016,13 +1013,11 @@ static void ifStatement() {
 
   int32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
 
-  emitByte(OP_POP); // Pop the condition value from the stack
   statement();
   int32_t elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
 
-  emitByte(OP_POP); // Pop the condition value from the stack
   if (match(TOKEN_ELSE))
     statement();
   patchJump(elseJump);
@@ -1047,12 +1042,10 @@ static void whileStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'condition'.");
 
   int32_t exitJump = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP); // Pop condition value in the loop path
   statement();
   emitLoop(loopStart);
 
   patchJump(exitJump);
-  emitByte(OP_POP); // Pop condition value in the exit path
 }
 
 /**

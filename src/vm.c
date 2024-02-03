@@ -179,8 +179,7 @@ static InterpretResult run() {
 #define READ_LONG_OPERAND()                                                    \
   READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)
 
-#define READ_SHORT() \
-  (vm.ip += 2, (uint16_t)(vm.ip[-2] | (vm.ip[-1] << 8)))
+#define READ_SHORT() (vm.ip += 2, (uint16_t)(vm.ip[-2] | (vm.ip[-1] << 8)))
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
@@ -361,6 +360,12 @@ static InterpretResult run() {
       break;
     }
     case OP_JUMP_IF_FALSE: {
+      uint16_t offset = READ_SHORT();
+      if (isFalsey(pop()))
+        vm.ip += offset;
+      break;
+    }
+    case OP_JUMP_IF_FALSE_NP: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(peek(0)))
         vm.ip += offset;
