@@ -240,6 +240,15 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
   emitByte(byte2);
 }
 
+/**
+ * \brief Emits an OP_LOOP instruction.
+ *
+ * Unlike other jump instructions, there is no need for backpatching here. The
+ * size of the code that will be jumped is already known when this instruction
+ * is emitted.
+ *
+ * \param loopStart Offset to the start of the loop in the chunk
+ */
 static void emitLoop(const uint32_t loopStart) {
   emitByte(OP_LOOP);
 
@@ -251,7 +260,18 @@ static void emitLoop(const uint32_t loopStart) {
   emitByte((offset >> 8) & UINT16_MAX);
 }
 
-static int32_t emitJump(const uint8_t instruction) {
+/**
+ * \brief Emits a jump instruction.
+ *
+ * The operand of the jump instruction is filled with placeholder bytes. The
+ * caller must call "patchJump" after the size of the code to be jumped is
+ * determined in order to correctly fill the operand.
+ *
+ * \param instruction Jump instruction to be emitted
+ *
+ * \return Offset of the operand of the emitted instruction in the chunk
+ */
+static uint32_t emitJump(const uint8_t instruction) {
   emitByte(instruction);
 
   // Placeholder bytes for backpatching
@@ -339,13 +359,20 @@ static void emitConstant(const Value value) {
   emitOffsetOperandInstruction(OP_CONSTANT, offset);
 }
 
-static void patchJump(int32_t offset) {
+/**
+ * \brief Applies backpatching for a given jump.
+ *
+ * This function fills the operand of a jump instruction with the offset of the
+ * target of the jump.
+ *
+ * \param offset Offset to the first byte of the operand of the jump instruction
+ */
+static void patchJump(const uint32_t offset) {
   // -2 to adjust for the bytecode of the jump offset itself
-  int32_t jump = currentChunk()->count - offset - 2;
+  uint32_t jump = currentChunk()->count - offset - 2;
 
-  if (jump > UINT16_MAX) {
+  if (jump > UINT16_MAX)
     error("Too much code to jump over.");
-  }
 
   currentChunk()->code[offset] = jump & UINT8_MAX;
   currentChunk()->code[offset + 1] = (jump >> 8) & UINT8_MAX;
@@ -458,12 +485,16 @@ static void binary(const bool canAssign) {
   }
 }
 
+/**
+ * \brief Function to parse an expression with the conditional ternary operator.
+ *
+ */
 static void conditional(const bool canAssign) {
-  int32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
-  
+  uint32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+
   // Parse the then branch
   parsePrecedence(PREC_CONDITIONAL);
-  int32_t elseJump = emitJump(OP_JUMP);
+  uint32_t elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
 
@@ -514,9 +545,15 @@ static void number(const bool canAssign) {
   emitConstant(NUMBER_VAL(value));
 }
 
+/**
+ * \brief Function to parse a binary expression using "and".
+ *
+ * The produced code must short circuit if the LHS is false.
+ *
+ */
 static void and_(const bool canAssign) {
   // Doesn't have to evaluate the rest if the left-hand side is falsey
-  int32_t endJump = emitJump(OP_JUMP_IF_FALSE_NP);
+  uint32_t endJump = emitJump(OP_JUMP_IF_FALSE_NP);
 
   emitByte(OP_POP); // Pops the value of the left-hand side expression
   parsePrecedence(PREC_AND);
@@ -524,12 +561,18 @@ static void and_(const bool canAssign) {
   patchJump(endJump);
 }
 
+/**
+ * \brief Function to parse a binary expression using "and".
+ *
+ * The produced code must short circuit if the LHS is true.
+ *
+ */
 static void or_(const bool canAssign) {
   // Jumps the unconditional jump
-  int32_t elseJump = emitJump(OP_JUMP_IF_FALSE_NP);
+  uint32_t elseJump = emitJump(OP_JUMP_IF_FALSE_NP);
 
   // We don't evaluate the rest if the left-hand side is truthy
-  int32_t endJump = emitJump(OP_JUMP);
+  uint32_t endJump = emitJump(OP_JUMP);
 
   patchJump(elseJump);
 
@@ -980,6 +1023,10 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+/**
+ * \brief Function used to parse a for statement.
+ *
+ */
 static void forStatement() {
   beginScope();
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
@@ -989,12 +1036,15 @@ static void forStatement() {
   } else if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
     varDeclaration(parser.previous.type == TOKEN_CONST);
   } else {
+    // Initializer expression
     expressionStatement();
   }
 
-  int32_t loopStart = currentChunk()->count;
+  uint32_t loopStart = currentChunk()->count;
   int32_t exitJump = -1;
   if (!match(TOKEN_SEMICOLON)) {
+    // Condition
+
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
 
@@ -1003,8 +1053,10 @@ static void forStatement() {
   }
 
   if (!match(TOKEN_RIGHT_PAREN)) {
-    int32_t bodyJump = emitJump(OP_JUMP);
-    int32_t incrementStart = currentChunk()->count;
+    // Increment
+
+    uint32_t bodyJump = emitJump(OP_JUMP);
+    uint32_t incrementStart = currentChunk()->count;
 
     expression();
     emitByte(OP_POP); // Pop the result of the increment expression
@@ -1018,22 +1070,25 @@ static void forStatement() {
   statement();
   emitLoop(loopStart);
 
-  if (exitJump != -1) {
+  if (exitJump != -1)
     patchJump(exitJump);
-  }
 
   endScope();
 }
 
+/**
+ * \brief Function used to parse an if statement.
+ *
+ */
 static void ifStatement() {
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
-  int32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+  uint32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
 
   statement();
-  int32_t elseJump = emitJump(OP_JUMP);
+  uint32_t elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
 
@@ -1054,13 +1109,17 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
+/**
+ * \brief Function used to parse a while statement.
+ *
+ */
 static void whileStatement() {
   uint32_t loopStart = currentChunk()->count;
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'condition'.");
 
-  int32_t exitJump = emitJump(OP_JUMP_IF_FALSE);
+  uint32_t exitJump = emitJump(OP_JUMP_IF_FALSE);
   statement();
   emitLoop(loopStart);
 

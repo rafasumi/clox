@@ -179,6 +179,7 @@ static InterpretResult run() {
 #define READ_LONG_OPERAND()                                                    \
   (vm.ip += 3, (uint32_t)(vm.ip[-3] | (vm.ip[-2] << 8) | (vm.ip[-1] << 16)))
 
+// Read a 16-bit (or 2 bytes) operand from the chunk
 #define READ_SHORT() (vm.ip += 2, (uint16_t)(vm.ip[-2] | (vm.ip[-1] << 8)))
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode

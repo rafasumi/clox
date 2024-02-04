@@ -66,6 +66,18 @@ static size_t byteLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+/**
+ * \brief Display an instruction that applies a jump. Instruction like these
+ * take a 16-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param sign Integer value indicating the sign of the jump. If it is positive,
+ * then it is a forward jump. Otherwise, it is backwards.
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t jumpInstruction(const char* name, const int8_t sign,
                               const Chunk* chunk, const size_t offset) {
   uint16_t jump =
