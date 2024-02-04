@@ -359,6 +359,10 @@ Token scanToken() {
     return makeToken(TOKEN_COMMA);
   case '.':
     return makeToken(TOKEN_DOT);
+  case ':':
+    return makeToken(TOKEN_COLON);
+  case '?':
+    return makeToken(TOKEN_QUESTION);
   case '-':
     return makeToken(TOKEN_MINUS);
   case '+':

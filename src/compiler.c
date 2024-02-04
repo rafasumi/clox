@@ -38,15 +38,16 @@ typedef struct {
  */
 typedef enum {
   PREC_NONE,
-  PREC_ASSIGNMENT, /**< = */
-  PREC_OR,         /**< or */
-  PREC_AND,        /**< and */
-  PREC_EQUALITY,   /**< == != */
-  PREC_COMPARISON, /**< < > <= >= */
-  PREC_TERM,       /**< + - */
-  PREC_FACTOR,     /**< * / */
-  PREC_UNARY,      /**< ! - */
-  PREC_CALL,       /**< . () */
+  PREC_ASSIGNMENT,  /**< = */
+  PREC_CONDITIONAL, /**< ? */
+  PREC_OR,          /**< or */
+  PREC_AND,         /**< and */
+  PREC_EQUALITY,    /**< == != */
+  PREC_COMPARISON,  /**< < > <= >= */
+  PREC_TERM,        /**< + - */
+  PREC_FACTOR,      /**< * / */
+  PREC_UNARY,       /**< ! - */
+  PREC_CALL,        /**< . () */
   PREC_PRIMARY
 } Precedence;
 
@@ -457,6 +458,22 @@ static void binary(const bool canAssign) {
   }
 }
 
+static void conditional(const bool canAssign) {
+  int32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+  
+  // Parse the then branch
+  parsePrecedence(PREC_CONDITIONAL);
+  int32_t elseJump = emitJump(OP_JUMP);
+
+  patchJump(thenJump);
+
+  consume(TOKEN_COLON, "Expect ':' after then branch of conditional operator.");
+
+  // Parse the else branch
+  parsePrecedence(PREC_ASSIGNMENT);
+  patchJump(elseJump);
+}
+
 /**
  * \brief Function to parse a literal expression
  *
@@ -768,10 +785,12 @@ ParseRule rules[] = {
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
     [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
+    [TOKEN_QUESTION] = {NULL, conditional, PREC_CONDITIONAL},
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
