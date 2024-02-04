@@ -53,10 +53,16 @@ typedef enum {
   OP_LTE,  /**< Compares the next two values in the stack using "less than or
               equal to" */
   OP_ADD,  /**< Adds the next two values in the stack */
-  OP_SUBTRACT, /**< Subtracts the next two values in the stack */
-  OP_MULTIPLY, /**< Multiplies the next two values in the stack */
-  OP_DIVIDE,   /**< Divides the next two values in the stack */
-  OP_PRINT,
+  OP_SUBTRACT,      /**< Subtracts the next two values in the stack */
+  OP_MULTIPLY,      /**< Multiplies the next two values in the stack */
+  OP_DIVIDE,        /**< Divides the next two values in the stack */
+  OP_PRINT,         /**< Prints the value at the top of the stack */
+  OP_JUMP,          /**< Unconditionally jumps to another instruction */
+  OP_JUMP_IF_FALSE, /**< Jumps to another instruction if the value at the top of
+                       the stack is false. It also pops the value in the stack*/
+  OP_JUMP_IF_FALSE_NP, /**< Jumps to another instruction if the value at the top
+                       of the stack is false */
+  OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_RETURN /**< Returns from the current function */
 } OpCode;
 

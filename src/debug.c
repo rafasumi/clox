@@ -42,7 +42,7 @@ static size_t simpleInstruction(const char* name, const size_t offset) {
 static size_t byteInstruction(const char* name, const Chunk* chunk,
                               const size_t offset) {
   uint8_t slot = chunk->code[offset + 1];
-  printf("%-16s %4d\n", name, slot);
+  printf("%-21s %4d\n", name, slot);
 
   return offset + 2;
 }
@@ -61,9 +61,30 @@ static size_t byteLongInstruction(const char* name, const Chunk* chunk,
                                   const size_t offset) {
   uint32_t slot = (chunk->code[offset + 3] << 16) |
                   (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
-  printf("%-16s %4d\n", name, slot);
+  printf("%-21s %4d\n", name, slot);
 
   return offset + 4;
+}
+
+/**
+ * \brief Display an instruction that applies a jump. Instruction like these
+ * take a 16-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param sign Integer value indicating the sign of the jump. If it is positive,
+ * then it is a forward jump. Otherwise, it is backwards.
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t jumpInstruction(const char* name, const int8_t sign,
+                              const Chunk* chunk, const size_t offset) {
+  uint16_t jump =
+      (uint16_t)((chunk->code[offset + 2] << 8) | chunk->code[offset + 1]);
+  printf("%-21s %4ld -> %ld\n", name, offset, offset + 3 + sign * jump);
+
+  return offset + 3;
 }
 
 /**
@@ -79,7 +100,7 @@ static size_t byteLongInstruction(const char* name, const Chunk* chunk,
 static size_t constantInstruction(const char* name, const Chunk* chunk,
                                   const size_t offset) {
   uint8_t constantOffset = chunk->code[offset + 1];
-  printf("%-16s %4d '", name, constantOffset);
+  printf("%-21s %4d '", name, constantOffset);
 
   printValue(chunk->constants.values[constantOffset]);
   printf("'\n");
@@ -103,7 +124,7 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
                             (chunk->code[offset + 2] << 8) |
                             chunk->code[offset + 1];
 
-  printf("%-16s %4d '", name, constantOffset);
+  printf("%-21s %4d '", name, constantOffset);
 
   printValue(chunk->constants.values[constantOffset]);
   printf("'\n");
@@ -124,10 +145,8 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
 static size_t globalInstruction(const char* name, const Chunk* chunk,
                                 const size_t offset) {
   uint8_t globalOffset = chunk->code[offset + 1];
-
-  printf("%-16s %4d '", name, globalOffset);
-  printValue(vm.globalValues.vars[globalOffset].value);
-  printf("'\n");
+  printf("%-21s %4d '%s'\n", name, globalOffset,
+         vm.globalValues.vars[globalOffset].identifier->chars);
 
   return offset + 2;
 }
@@ -148,9 +167,8 @@ static size_t globalLongInstruction(const char* name, const Chunk* chunk,
                           (chunk->code[offset + 2] << 8) |
                           chunk->code[offset + 1];
 
-  printf("%-16s %4d '", name, globalOffset);
-  printValue(vm.globalValues.vars[globalOffset].value);
-  printf("'\n");
+  printf("%-21s %4d '%s'\n", name, globalOffset,
+         vm.globalValues.vars[globalOffset].identifier->chars);
 
   return offset + 4;
 }
@@ -226,6 +244,14 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_DIVIDE", offset);
   case OP_PRINT:
     return simpleInstruction("OP_PRINT", offset);
+  case OP_JUMP:
+    return jumpInstruction("OP_JUMP", 1, chunk, offset);
+  case OP_JUMP_IF_FALSE:
+    return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+  case OP_JUMP_IF_FALSE_NP:
+    return jumpInstruction("OP_JUMP_IF_FALSE_NP", 1, chunk, offset);
+  case OP_LOOP:
+    return jumpInstruction("OP_LOOP", -1, chunk, offset);
   case OP_RETURN:
     return simpleInstruction("OP_RETURN", offset);
   default:

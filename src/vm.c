@@ -177,7 +177,10 @@ static InterpretResult run() {
 
 // Read a 24-bit (or 3 bytes) operand from the chunk
 #define READ_LONG_OPERAND()                                                    \
-  READ_BYTE() | ((READ_BYTE()) << 8) | ((READ_BYTE()) << 16)
+  (vm.ip += 3, (uint32_t)(vm.ip[-3] | (vm.ip[-2] << 8) | (vm.ip[-1] << 16)))
+
+// Read a 16-bit (or 2 bytes) operand from the chunk
+#define READ_SHORT() (vm.ip += 2, (uint16_t)(vm.ip[-2] | (vm.ip[-1] << 8)))
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
@@ -352,6 +355,28 @@ static InterpretResult run() {
       printf("\n");
       break;
     }
+    case OP_JUMP: {
+      uint16_t offset = READ_SHORT();
+      vm.ip += offset;
+      break;
+    }
+    case OP_JUMP_IF_FALSE: {
+      uint16_t offset = READ_SHORT();
+      if (isFalsey(pop()))
+        vm.ip += offset;
+      break;
+    }
+    case OP_JUMP_IF_FALSE_NP: {
+      uint16_t offset = READ_SHORT();
+      if (isFalsey(peek(0)))
+        vm.ip += offset;
+      break;
+    }
+    case OP_LOOP: {
+      uint16_t offset = READ_SHORT();
+      vm.ip -= offset;
+      break;
+    }
     case OP_RETURN:
       // Exit the interpreter
       return INTERPRET_OK;
@@ -362,6 +387,7 @@ static InterpretResult run() {
 
 #undef READ_BYTE
 #undef READ_LONG_OPERAND
+#undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
 #undef READ_STRING

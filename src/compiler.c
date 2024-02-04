@@ -38,15 +38,16 @@ typedef struct {
  */
 typedef enum {
   PREC_NONE,
-  PREC_ASSIGNMENT, /**< = */
-  PREC_OR,         /**< or */
-  PREC_AND,        /**< and */
-  PREC_EQUALITY,   /**< == != */
-  PREC_COMPARISON, /**< < > <= >= */
-  PREC_TERM,       /**< + - */
-  PREC_FACTOR,     /**< * / */
-  PREC_UNARY,      /**< ! - */
-  PREC_CALL,       /**< . () */
+  PREC_ASSIGNMENT,  /**< = */
+  PREC_CONDITIONAL, /**< ? */
+  PREC_OR,          /**< or */
+  PREC_AND,         /**< and */
+  PREC_EQUALITY,    /**< == != */
+  PREC_COMPARISON,  /**< < > <= >= */
+  PREC_TERM,        /**< + - */
+  PREC_FACTOR,      /**< * / */
+  PREC_UNARY,       /**< ! - */
+  PREC_CALL,        /**< . () */
   PREC_PRIMARY
 } Precedence;
 
@@ -240,6 +241,48 @@ static void emitBytes(const uint8_t byte1, const uint8_t byte2) {
 }
 
 /**
+ * \brief Emits an OP_LOOP instruction.
+ *
+ * Unlike other jump instructions, there is no need for backpatching here. The
+ * size of the code that will be jumped is already known when this instruction
+ * is emitted.
+ *
+ * \param loopStart Offset to the start of the loop in the chunk
+ */
+static void emitLoop(const uint32_t loopStart) {
+  emitByte(OP_LOOP);
+
+  int32_t offset = currentChunk()->count - loopStart + 2;
+  if (offset > UINT16_MAX)
+    error("Loop body too large.");
+
+  emitByte(offset & UINT8_MAX);
+  emitByte((offset >> 8) & UINT16_MAX);
+}
+
+/**
+ * \brief Emits a jump instruction.
+ *
+ * The operand of the jump instruction is filled with placeholder bytes. The
+ * caller must call "patchJump" after the size of the code to be jumped is
+ * determined in order to correctly fill the operand.
+ *
+ * \param instruction Jump instruction to be emitted
+ *
+ * \return Offset of the operand of the emitted instruction in the chunk
+ */
+static uint32_t emitJump(const uint8_t instruction) {
+  emitByte(instruction);
+
+  // Placeholder bytes for backpatching
+  emitByte(UINT8_MAX);
+  emitByte(UINT8_MAX);
+
+  // Returns the offset of the emitted instruction in the chunk
+  return currentChunk()->count - 2;
+}
+
+/**
  * \brief Emits an instruction that takes an operand which is an offset. This
  * instruction must have two versions, one for an 8-bit offset and the other
  * for a 24-bit offset.
@@ -314,6 +357,25 @@ static void emitConstant(const Value value) {
   uint32_t offset = makeConstant(value);
 
   emitOffsetOperandInstruction(OP_CONSTANT, offset);
+}
+
+/**
+ * \brief Applies backpatching for a given jump.
+ *
+ * This function fills the operand of a jump instruction with the offset of the
+ * target of the jump.
+ *
+ * \param offset Offset to the first byte of the operand of the jump instruction
+ */
+static void patchJump(const uint32_t offset) {
+  // -2 to adjust for the bytecode of the jump offset itself
+  uint32_t jump = currentChunk()->count - offset - 2;
+
+  if (jump > UINT16_MAX)
+    error("Too much code to jump over.");
+
+  currentChunk()->code[offset] = jump & UINT8_MAX;
+  currentChunk()->code[offset + 1] = (jump >> 8) & UINT8_MAX;
 }
 
 /**
@@ -424,6 +486,26 @@ static void binary(const bool canAssign) {
 }
 
 /**
+ * \brief Function to parse an expression with the conditional ternary operator.
+ *
+ */
+static void conditional(const bool canAssign) {
+  uint32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+
+  // Parse the then branch
+  parsePrecedence(PREC_CONDITIONAL);
+  uint32_t elseJump = emitJump(OP_JUMP);
+
+  patchJump(thenJump);
+
+  consume(TOKEN_COLON, "Expect ':' after then branch of conditional operator.");
+
+  // Parse the else branch
+  parsePrecedence(PREC_ASSIGNMENT);
+  patchJump(elseJump);
+}
+
+/**
  * \brief Function to parse a literal expression
  *
  */
@@ -464,6 +546,44 @@ static void number(const bool canAssign) {
 }
 
 /**
+ * \brief Function to parse a binary expression using "and".
+ *
+ * The produced code must short circuit if the LHS is false.
+ *
+ */
+static void and_(const bool canAssign) {
+  // Doesn't have to evaluate the rest if the left-hand side is falsey
+  uint32_t endJump = emitJump(OP_JUMP_IF_FALSE_NP);
+
+  emitByte(OP_POP); // Pops the value of the left-hand side expression
+  parsePrecedence(PREC_AND);
+
+  patchJump(endJump);
+}
+
+/**
+ * \brief Function to parse a binary expression using "and".
+ *
+ * The produced code must short circuit if the LHS is true.
+ *
+ */
+static void or_(const bool canAssign) {
+  // Jumps the unconditional jump
+  uint32_t elseJump = emitJump(OP_JUMP_IF_FALSE_NP);
+
+  // We don't evaluate the rest if the left-hand side is truthy
+  uint32_t endJump = emitJump(OP_JUMP);
+
+  patchJump(elseJump);
+
+  // Pops the value of the left-hand side expression
+  emitByte(OP_POP);
+
+  parsePrecedence(PREC_OR);
+  patchJump(endJump);
+}
+
+/**
  * \brief Function to parse a string expression
  *
  */
@@ -497,8 +617,12 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
     uint32_t offset = (uint32_t)AS_NUMBER(globalValuesOffset);
 
     if (*isConst == CONST_UNKNOWN) {
+      // The global appears in an expression
+
       *isConst = (ConstFlag)vm.globalValues.vars[offset].isConst;
     } else {
+      // The global appears in an assignment
+
       // A global identifier might change its constant modifier if it is
       // redefined. Thus, we must update its state
 
@@ -507,6 +631,9 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
 
     return offset;
   }
+
+  // This line is needed in the case of an assignment to an undeclared global
+  *isConst = ((*isConst == CONST_UNKNOWN) ? false : *isConst);
 
   // Watch out for double free of identifier
   writeGlobalVarArray(&vm.globalValues,
@@ -554,7 +681,7 @@ static bool identifiersEqual(const Token* a, const Token* b) {
  */
 static uint32_t resolveLocal(Compiler* compiler, const Token* name,
                              bool* isConst) {
-  for (int i = compiler->localCount - 1; i >= 0; --i) {
+  for (int32_t i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
       if (local->depth == -1)
@@ -603,7 +730,7 @@ static void declareVariable(const bool isConst) {
     return;
 
   Token* name = &parser.previous;
-  for (int i = current->localCount - 1; i >= 0; --i) {
+  for (int32_t i = current->localCount - 1; i >= 0; --i) {
     Local* local = &current->locals[i];
     if (local->depth != -1 && local->depth < current->scopeDepth)
       break;
@@ -701,10 +828,12 @@ ParseRule rules[] = {
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
     [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
+    [TOKEN_QUESTION] = {NULL, conditional, PREC_CONDITIONAL},
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
@@ -719,7 +848,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
@@ -728,7 +857,7 @@ ParseRule rules[] = {
     [TOKEN_FUN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NIL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
@@ -895,6 +1024,80 @@ static void expressionStatement() {
 }
 
 /**
+ * \brief Function used to parse a for statement.
+ *
+ */
+static void forStatement() {
+  beginScope();
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+
+  if (match(TOKEN_SEMICOLON)) {
+    // No initializer
+  } else if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
+    varDeclaration(parser.previous.type == TOKEN_CONST);
+  } else {
+    // Initializer expression
+    expressionStatement();
+  }
+
+  uint32_t loopStart = currentChunk()->count;
+  int32_t exitJump = -1;
+  if (!match(TOKEN_SEMICOLON)) {
+    // Condition
+
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+
+    // Jump out of the loop if the condition is false
+    exitJump = emitJump(OP_JUMP_IF_FALSE);
+  }
+
+  if (!match(TOKEN_RIGHT_PAREN)) {
+    // Increment
+
+    uint32_t bodyJump = emitJump(OP_JUMP);
+    uint32_t incrementStart = currentChunk()->count;
+
+    expression();
+    emitByte(OP_POP); // Pop the result of the increment expression
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    emitLoop(loopStart);
+    loopStart = incrementStart;
+    patchJump(bodyJump);
+  }
+
+  statement();
+  emitLoop(loopStart);
+
+  if (exitJump != -1)
+    patchJump(exitJump);
+
+  endScope();
+}
+
+/**
+ * \brief Function used to parse an if statement.
+ *
+ */
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  uint32_t thenJump = emitJump(OP_JUMP_IF_FALSE);
+
+  statement();
+  uint32_t elseJump = emitJump(OP_JUMP);
+
+  patchJump(thenJump);
+
+  if (match(TOKEN_ELSE))
+    statement();
+  patchJump(elseJump);
+}
+
+/**
  * \brief Function used to parse a print statement.
  *
  * Prints in Lox are statements and not function calls.
@@ -904,6 +1107,23 @@ static void printStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after value");
   emitByte(OP_PRINT);
+}
+
+/**
+ * \brief Function used to parse a while statement.
+ *
+ */
+static void whileStatement() {
+  uint32_t loopStart = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'condition'.");
+
+  uint32_t exitJump = emitJump(OP_JUMP_IF_FALSE);
+  statement();
+  emitLoop(loopStart);
+
+  patchJump(exitJump);
 }
 
 /**
@@ -962,6 +1182,12 @@ static void declaration() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_FOR)) {
+    forStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
