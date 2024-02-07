@@ -45,6 +45,13 @@ ObjFunction* newFunction() {
   return function;
 }
 
+ObjNative* newNative(NativeFn function) {
+  ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+  native->function = function;
+
+  return native;
+}
+
 /**
  * \brief Produces the hash code for a given string using the FNV-1a hash
  * function.
@@ -124,6 +131,9 @@ void printObject(const Value value) {
   switch (OBJ_TYPE(value)) {
   case OBJ_FUNCTION:
     printFunction(AS_FUNCTION(value));
+    break;
+  case OBJ_NATIVE:
+    printf("<native fn>");
     break;
   case OBJ_STRING:
     printf("%s", AS_CSTRING(value));

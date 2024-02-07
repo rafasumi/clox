@@ -37,6 +37,9 @@ typedef struct {
 #define UNDEFINED_GLOBAL(identifier, isConst)                                  \
   ((GlobalVar){identifier, UNDEFINED_VAL, isConst})
 
+#define NEW_GLOBAL(identifier, value, isConst)                                 \
+  ((GlobalVar){identifier, value, isConst})
+
 /**
  * \brief Initializes the resources of a given global values array.
  *

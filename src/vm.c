@@ -14,8 +14,13 @@
 
 #include <stdarg.h>
 #include <string.h>
+#include <time.h>
 
 VM vm;
+
+static Value clockNative(const uint8_t argCount, const Value* args) {
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
 
 /**
  * \brief Resets the value stack by moving the stack pointer to its start.
@@ -55,12 +60,28 @@ static void runtimeError(const char* format, ...) {
   resetStack();
 }
 
+static void defineNative(const char* name, NativeFn function) {
+  push(OBJ_VAL(copyString(name, strlen(name))));
+  push(OBJ_VAL(newNative(function)));
+
+  ObjString* identifier = AS_STRING(vm.stack[0]);
+  writeGlobalVarArray(&vm.globalValues,
+                      NEW_GLOBAL(identifier, vm.stack[1], true));
+  tableSet(&vm.globalNames, identifier,
+           NUMBER_VAL((double)vm.globalValues.count - 1));
+  
+  pop();
+  pop();
+}
+
 void initVM() {
   resetStack();
   vm.objects = NULL;
   initTable(&vm.globalNames);
   initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
+
+  defineNative("clock", clockNative);
 }
 
 void freeVM() {
@@ -116,6 +137,13 @@ static bool callValue(const Value callee, const uint8_t argCount) {
     switch (OBJ_TYPE(callee)) {
     case OBJ_FUNCTION:
       return call(AS_FUNCTION(callee), argCount);
+    case OBJ_NATIVE: {
+      NativeFn native = AS_NATIVE(callee);
+      Value result = native(argCount, vm.stackTop - argCount);
+      vm.stackTop -= argCount + 1;
+      push(result);
+      return true;
+    }
     default:
       break; // Non-callable object type
     }
