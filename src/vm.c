@@ -8,7 +8,7 @@
 #include "memory.h"
 #include "object.h"
 
-#ifdef DEBUG
+#ifdef DEBUG_TRACE_EXECUTION
 #include "debug.h"
 #endif
 
@@ -258,13 +258,13 @@ static InterpretResult run() {
     push(valueType(left op right));                                            \
   } while (false)
 
-#ifdef DEBUG
+#ifdef DEBUG_TRACE_EXECUTION
   printf("\n=== execution trace ===");
 #endif
 
   while (true) {
 
-#ifdef DEBUG
+#ifdef DEBUG_TRACE_EXECUTION
     printf("          ");
     for (Value* slot = vm.stack; slot < vm.stackTop; ++slot) {
       printf("[");

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef DEBUG
+#ifdef DEBUG_BYTECODE
 #include "debug.h"
 #endif
 
@@ -419,7 +419,7 @@ static ObjFunction* endCompiler() {
   emitReturn();
   ObjFunction* function = current->function;
 
-#ifdef DEBUG
+#ifdef DEBUG_BYTECODE
   if (!parser.hadError) {
     disassembleChunk(currentChunk(), function->name != NULL
                                          ? function->name->chars
