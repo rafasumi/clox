@@ -82,11 +82,17 @@ typedef struct {
   bool isConst;  /**< Flag that indicates if it is a constant variable */
 } Local;
 
+typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+
 /**
  * \struct Compiler
  * \brief Strucure used to store relevant state for the clox compiler
  */
-typedef struct {
+typedef struct Compiler {
+  struct Compiler* enclosing;
+  ObjFunction* function;
+  FunctionType type;
+
   Local locals[UINT16_COUNT]; /**< Array used to store local variables */
   uint32_t localCount; /**< Current number of local variables in locals */
   int32_t scopeDepth;  /**< Scope depth of the code being compiled */
@@ -95,7 +101,6 @@ typedef struct {
 // --------- Module variables ---------
 Parser parser;
 Compiler* current = NULL;
-Chunk* compilingChunk;
 // ------------------------------------
 
 /**
@@ -105,7 +110,7 @@ Chunk* compilingChunk;
  * \return Pointer to the chunk
  */
 static Chunk* currentChunk() {
-  return compilingChunk;
+  return &current->function->chunk;
 }
 
 /**
@@ -320,6 +325,7 @@ static void emitOffsetOperandInstruction(const uint8_t instruction,
  *
  */
 static void emitReturn() {
+  emitByte(OP_NIL);
   emitByte(OP_RETURN);
 }
 
@@ -383,10 +389,25 @@ static void patchJump(const uint32_t offset) {
  *
  * \param compiler Pointer to the compiler's state struct
  */
-static void initCompiler(Compiler* compiler) {
+static void initCompiler(Compiler* compiler, FunctionType type) {
+  compiler->enclosing = current;
+  compiler->function = NULL;
+  compiler->type = type;
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
+  compiler->function = newFunction();
   current = compiler;
+  if (type != TYPE_SCRIPT) {
+    current->function->name =
+        copyString(parser.previous.start, parser.previous.length);
+  }
+
+  // Claim stack slot 0 for the VM's own internal use
+  Local* local = &current->locals[current->localCount++];
+  local->depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
+  local->isConst = false;
 }
 
 /**
@@ -394,14 +415,20 @@ static void initCompiler(Compiler* compiler) {
  * disassemble the compiled chunk
  *
  */
-static void endCompiler() {
+static ObjFunction* endCompiler() {
   emitReturn();
+  ObjFunction* function = current->function;
 
 #ifdef DEBUG
   if (!parser.hadError) {
-    disassembleChunk(currentChunk(), "code");
+    disassembleChunk(currentChunk(), function->name != NULL
+                                         ? function->name->chars
+                                         : "<script>");
   }
 #endif
+
+  current = current->enclosing;
+  return function;
 }
 
 /**
@@ -483,6 +510,28 @@ static void binary(const bool canAssign) {
   default:
     return; // Unreachable.
   }
+}
+
+static uint8_t argumentList() {
+  uint8_t argCount = 0;
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      expression();
+
+      if (argCount == 255)
+        error("Can't have more than 255 arguments.");
+      ++argCount;
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+
+  return argCount;
+}
+
+static void call(const bool canAssign) {
+  uint8_t argCount = argumentList();
+  emitBytes(OP_CALL, argCount);
 }
 
 /**
@@ -824,7 +873,7 @@ static void unary(const bool canAssign) {
 // This array is used to specify parse rules for each token in the grammar. It
 // is needed to apply Vaughan Pratt’s “top-down operator precedence parsing”
 ParseRule rules[] = {
-    [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
+    [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
@@ -931,6 +980,9 @@ static uint32_t parseVariable(const char* errorMessage, const bool isConst) {
  *
  */
 static void markInitialized() {
+  if (current->scopeDepth == 0)
+    return;
+
   current->locals[current->localCount - 1].depth = current->scopeDepth;
 }
 
@@ -984,6 +1036,39 @@ static void block() {
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+static void function(FunctionType type) {
+  Compiler compiler;
+  initCompiler(&compiler, type);
+  beginScope();
+
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      current->function->arity++;
+      if (current->function->arity > 255) {
+        errorAtCurrent("Can't have more than 255 parameters.");
+      }
+      uint8_t constant = parseVariable("Expect parameter name", false);
+      defineVariable(constant);
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
+  block();
+
+  ObjFunction* function = endCompiler();
+  emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+}
+
+static void funDeclaration() {
+  uint8_t global = parseVariable("Expect function name.", true);
+  markInitialized();
+
+  function(TYPE_FUNCTION);
+
+  defineVariable(global);
 }
 
 /**
@@ -1165,7 +1250,9 @@ static void synchronize() {
  *
  */
 static void declaration() {
-  if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
+  if (match(TOKEN_FUN)) {
+    funDeclaration();
+  } else if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
     varDeclaration(parser.previous.type == TOKEN_CONST);
   } else {
     statement();
@@ -1197,13 +1284,11 @@ static void statement() {
   }
 }
 
-bool compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source) {
   initScanner(source);
 
   Compiler compiler;
-  initCompiler(&compiler);
-
-  compilingChunk = chunk;
+  initCompiler(&compiler, TYPE_SCRIPT);
 
   parser.hadError = false;
   parser.panicMode = false;
@@ -1214,7 +1299,6 @@ bool compile(const char* source, Chunk* chunk) {
     declaration();
   }
 
-  endCompiler();
-
-  return !parser.hadError;
+  ObjFunction* function = endCompiler();
+  return parser.hadError ? NULL : function;
 }

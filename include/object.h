@@ -5,6 +5,7 @@
 #ifndef CLOX_OBJECT_H
 #define CLOX_OBJECT_H
 
+#include "chunk.h"
 #include "common.h"
 #include "value.h"
 
@@ -14,11 +15,15 @@
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
+#define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
+
 /**
  * \def IS_STRING(value)
  * \brief Helper macro used to determine if a given value is a string
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
+
+#define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 
 /**
  * \def AS_STRING(value)
@@ -37,6 +42,7 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
+  OBJ_FUNCTION,
   OBJ_STRING, /**< String object */
 } ObjType;
 
@@ -49,6 +55,13 @@ struct Obj {
   struct Obj* next; /**< Next object in the linked-list of allocated objects */
 };
 
+typedef struct {
+  Obj obj;
+  uint32_t arity;
+  Chunk chunk;
+  ObjString* name;
+} ObjFunction;
+
 /**
  * \struct ObjString
  * \brief Struct used to represent a string object
@@ -59,6 +72,8 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+ObjFunction* newFunction();
 
 /**
  * \brief Allocates an ObjString and takes ownership of an already allocated

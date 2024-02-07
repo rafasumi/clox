@@ -16,6 +16,6 @@
  *
  * \return Boolean value that indicates if the compiling process was successful
  */
-bool compile(const char* source, Chunk* chunk);
+ObjFunction* compile(const char* source);
 
 #endif

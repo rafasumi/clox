@@ -22,6 +22,7 @@ VM vm;
  */
 static void resetStack() {
   vm.stackTop = vm.stack;
+  vm.frameCount = 0;
 }
 
 /**
@@ -38,9 +39,19 @@ static void runtimeError(const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm.ip - vm.chunk->code - 1;
-  int line = getLine(vm.chunk, instruction);
-  eprintf("[line %d] in script\n", line);
+  for (int32_t i = vm.frameCount - 1; i >= 0; --i) {
+    CallFrame* frame = &vm.frames[i];
+    ObjFunction* function = frame->function;
+    size_t instruction = (frame->ip - 1) - function->chunk.code;
+    eprintf("[line %d] in ", getLine(&frame->function->chunk, instruction));
+
+    if (function->name == NULL) {
+      eprintf("script\n");
+    } else {
+      eprintf("%s()\n", function->name->chars);
+    }
+  }
+
   resetStack();
 }
 
@@ -79,6 +90,39 @@ Value pop() {
  */
 static Value peek(const int32_t distance) {
   return vm.stackTop[-1 - distance];
+}
+
+static bool call(ObjFunction* function, const uint8_t argCount) {
+  if (argCount != function->arity) {
+    runtimeError("Expected %d arguments but got %d", function->arity, argCount);
+    return false;
+  }
+
+  if (vm.frameCount == FRAMES_MAX) {
+    runtimeError("Stack overflow");
+    return false;
+  }
+
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm.stackTop - argCount - 1;
+
+  return true;
+}
+
+static bool callValue(const Value callee, const uint8_t argCount) {
+  if (IS_OBJ(callee)) {
+    switch (OBJ_TYPE(callee)) {
+    case OBJ_FUNCTION:
+      return call(AS_FUNCTION(callee), argCount);
+    default:
+      break; // Non-callable object type
+    }
+  }
+
+  runtimeError("Can only call functions and classes");
+  return false;
 }
 
 /**
@@ -172,23 +216,28 @@ static bool setGlobal(const uint32_t offset) {
  * \return Result of the interpretation process
  */
 static InterpretResult run() {
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
 // Read a single bytecode from the chunk and updates the instruction pointer
-#define READ_BYTE() (*(vm.ip++))
+#define READ_BYTE() (*(frame->ip++))
 
 // Read a 24-bit (or 3 bytes) operand from the chunk
 #define READ_LONG_OPERAND()                                                    \
-  (vm.ip += 3, (uint32_t)(vm.ip[-3] | (vm.ip[-2] << 8) | (vm.ip[-1] << 16)))
+  (frame->ip += 3,                                                             \
+   (uint32_t)(frame->ip[-3] | (frame->ip[-2] << 8) | (frame->ip[-1] << 16)))
 
 // Read a 16-bit (or 2 bytes) operand from the chunk
-#define READ_SHORT() (vm.ip += 2, (uint16_t)(vm.ip[-2] | (vm.ip[-1] << 8)))
+#define READ_SHORT()                                                           \
+  (frame->ip += 2, (uint16_t)(frame->ip[-2] | (frame->ip[-1] << 8)))
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 
 // Read a constant from the chunk based on the 24-bit offset at the bytecode
 // array
-#define READ_CONSTANT_LONG() (vm.chunk->constants.values[READ_LONG_OPERAND()])
+#define READ_CONSTANT_LONG()                                                   \
+  (frame->function->chunk.constants.values[READ_LONG_OPERAND()])
 
 // Read a string from the constants array with an 8-bit offset
 #define READ_STRING() AS_STRING(READ_CONSTANT())
@@ -224,7 +273,8 @@ static InterpretResult run() {
     }
     printf("\n");
 
-    disassembleInstruction(vm.chunk, (size_t)(vm.ip - vm.chunk->code));
+    disassembleInstruction(&frame->function->chunk,
+                           (size_t)(frame->ip - frame->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -253,22 +303,22 @@ static InterpretResult run() {
       break;
     case OP_GET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      push(vm.stack[slot]);
+      push(frame->slots[slot]);
       break;
     }
     case OP_GET_LOCAL_LONG: {
       uint32_t slot = READ_LONG_OPERAND();
-      push(vm.stack[slot]);
+      push(frame->slots[slot]);
       break;
     }
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      vm.stack[slot] = peek(0);
+      frame->slots[slot] = peek(0);
       break;
     }
     case OP_SET_LOCAL_LONG: {
       uint32_t slot = READ_LONG_OPERAND();
-      vm.stack[slot] = peek(0);
+      frame->slots[slot] = peek(0);
       break;
     }
     case OP_GET_GLOBAL:
@@ -357,29 +407,48 @@ static InterpretResult run() {
     }
     case OP_JUMP: {
       uint16_t offset = READ_SHORT();
-      vm.ip += offset;
+      frame->ip += offset;
       break;
     }
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(pop()))
-        vm.ip += offset;
+        frame->ip += offset;
       break;
     }
     case OP_JUMP_IF_FALSE_NP: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(peek(0)))
-        vm.ip += offset;
+        frame->ip += offset;
       break;
     }
     case OP_LOOP: {
       uint16_t offset = READ_SHORT();
-      vm.ip -= offset;
+      frame->ip -= offset;
       break;
     }
+    case OP_CALL: {
+      uint8_t argCount = READ_BYTE();
+      if (!callValue(peek(argCount), argCount))
+        return INTERPRET_RUNTIME_ERROR;
+      frame = &vm.frames[vm.frameCount - 1];
+      break;
+      ;
+    }
     case OP_RETURN:
-      // Exit the interpreter
-      return INTERPRET_OK;
+      Value result = pop();
+
+      vm.frameCount--;
+      if (vm.frameCount == 0) {
+        pop();
+        return INTERPRET_OK;
+      }
+
+      vm.stackTop = frame->slots;
+      push(result);
+      frame = &vm.frames[vm.frameCount - 1];
+
+      break;
     default:
       break;
     }
@@ -396,19 +465,14 @@ static InterpretResult run() {
 }
 
 InterpretResult interpret(const char* source) {
-  Chunk chunk;
-  initChunk(&chunk);
-
-  if (!compile(source, &chunk)) {
-    freeChunk(&chunk);
+  ObjFunction* function = compile(source);
+  if (function == NULL)
     return INTERPRET_COMPILE_ERROR;
-  }
 
-  vm.chunk = &chunk;
-  vm.ip = vm.chunk->code;
+  push(OBJ_VAL(function));
+  call(function, 0);
 
   InterpretResult result = run();
 
-  freeChunk(&chunk);
   return result;
 }
