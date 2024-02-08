@@ -69,7 +69,7 @@ static void defineNative(const char* name, NativeFn function) {
                       NEW_GLOBAL(identifier, vm.stack[1], true));
   tableSet(&vm.globalNames, identifier,
            NUMBER_VAL((double)vm.globalValues.count - 1));
-  
+
   pop();
   pop();
 }
@@ -196,10 +196,11 @@ static void concatenate() {
  * the variable
  *
  */
-static bool getGlobal(const uint32_t offset) {
+static bool getGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   GlobalVar var = vm.globalValues.vars[offset];
 
   if (IS_UNDEFINED(var.value)) {
+    frame->ip = ip;
     runtimeError("Undefined variable '%s'.", var.identifier->chars);
     return false;
   }
@@ -226,10 +227,11 @@ static void defineGlobal(const uint32_t offset) {
  *
  * \return Boolean value that indicates if there were any errors
  */
-static bool setGlobal(const uint32_t offset) {
+static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   GlobalVar* var = vm.globalValues.vars + offset;
 
   if (IS_UNDEFINED(var->value)) {
+    frame->ip = ip;
     runtimeError("Undefined variable '%s'.", var->identifier->chars);
     return false;
   }
@@ -245,18 +247,17 @@ static bool setGlobal(const uint32_t offset) {
  */
 static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
+  register uint8_t* ip = frame->ip;
 
 // Read a single bytecode from the chunk and updates the instruction pointer
-#define READ_BYTE() (*(frame->ip++))
+#define READ_BYTE() (*(ip++))
 
 // Read a 24-bit (or 3 bytes) operand from the chunk
 #define READ_LONG_OPERAND()                                                    \
-  (frame->ip += 3,                                                             \
-   (uint32_t)(frame->ip[-3] | (frame->ip[-2] << 8) | (frame->ip[-1] << 16)))
+  (ip += 3, (uint32_t)(ip[-3] | (ip[-2] << 8) | (ip[-1] << 16)))
 
 // Read a 16-bit (or 2 bytes) operand from the chunk
-#define READ_SHORT()                                                           \
-  (frame->ip += 2, (uint16_t)(frame->ip[-2] | (frame->ip[-1] << 8)))
+#define READ_SHORT() (ip += 2, (uint16_t)(ip[-2] | (ip[-1] << 8)))
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
@@ -278,6 +279,7 @@ static InterpretResult run() {
 #define BINARY_OP(valueType, op)                                               \
   do {                                                                         \
     if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) {                          \
+      frame->ip = ip;                                                          \
       runtimeError("Operands must be numbers.");                               \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
@@ -302,7 +304,7 @@ static InterpretResult run() {
     printf("\n");
 
     disassembleInstruction(&frame->function->chunk,
-                           (size_t)(frame->ip - frame->function->chunk.code));
+                           (size_t)(ip - frame->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -350,11 +352,11 @@ static InterpretResult run() {
       break;
     }
     case OP_GET_GLOBAL:
-      if (!getGlobal(READ_BYTE()))
+      if (!getGlobal(READ_BYTE(), frame, ip))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_GET_GLOBAL_LONG:
-      if (!getGlobal(READ_LONG_OPERAND()))
+      if (!getGlobal(READ_LONG_OPERAND(), frame, ip))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_DEFINE_GLOBAL:
@@ -364,11 +366,11 @@ static InterpretResult run() {
       defineGlobal(READ_LONG_OPERAND());
       break;
     case OP_SET_GLOBAL:
-      if (!setGlobal(READ_BYTE()))
+      if (!setGlobal(READ_BYTE(), frame, ip))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_SET_GLOBAL_LONG:
-      if (!setGlobal(READ_LONG_OPERAND()))
+      if (!setGlobal(READ_LONG_OPERAND(), frame, ip))
         return INTERPRET_RUNTIME_ERROR;
       break;
     case OP_NOT:
@@ -376,6 +378,7 @@ static InterpretResult run() {
       break;
     case OP_NEGATE:
       if (!IS_NUMBER(peek(0))) {
+        frame->ip = ip;
         runtimeError("Operand must be a number.");
         return INTERPRET_RUNTIME_ERROR;
       }
@@ -414,6 +417,7 @@ static InterpretResult run() {
       } else if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
         concatenate();
       } else {
+        frame->ip = ip;
         runtimeError("Operands must be two numbers or two strings.");
         return INTERPRET_RUNTIME_ERROR;
       }
@@ -435,31 +439,33 @@ static InterpretResult run() {
     }
     case OP_JUMP: {
       uint16_t offset = READ_SHORT();
-      frame->ip += offset;
+      ip += offset;
       break;
     }
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(pop()))
-        frame->ip += offset;
+        ip += offset;
       break;
     }
     case OP_JUMP_IF_FALSE_NP: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(peek(0)))
-        frame->ip += offset;
+        ip += offset;
       break;
     }
     case OP_LOOP: {
       uint16_t offset = READ_SHORT();
-      frame->ip -= offset;
+      ip -= offset;
       break;
     }
     case OP_CALL: {
       uint8_t argCount = READ_BYTE();
+      frame->ip = ip;
       if (!callValue(peek(argCount), argCount))
         return INTERPRET_RUNTIME_ERROR;
       frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
       break;
       ;
     }
@@ -475,6 +481,7 @@ static InterpretResult run() {
       vm.stackTop = frame->slots;
       push(result);
       frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
 
       break;
     default:
