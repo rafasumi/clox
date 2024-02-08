@@ -15,11 +15,22 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 VM vm;
 
 static bool clockNative(const uint8_t argCount, Value* args) {
   args[-1] = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+  return true;
+}
+
+static bool sqrtNative(const uint8_t argCount, Value* args) {
+  if (!IS_NUMBER(args[0])) {
+    args[-1] = OBJ_VAL(copyString("Argument must be a number!", 26));
+    return false;
+  }
+
+  args[-1] = NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
   return true;
 }
 
@@ -84,6 +95,7 @@ void initVM() {
   initTable(&vm.strings);
 
   defineNative("clock", clockNative, 0);
+  defineNative("sqrt", sqrtNative, 1);
 }
 
 void freeVM() {
