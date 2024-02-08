@@ -45,9 +45,10 @@ ObjFunction* newFunction() {
   return function;
 }
 
-ObjNative* newNative(NativeFn function) {
+ObjNative* newNative(const NativeFn function, const uint32_t arity) {
   ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
   native->function = function;
+  native->arity = arity;
 
   return native;
 }

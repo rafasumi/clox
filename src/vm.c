@@ -18,8 +18,9 @@
 
 VM vm;
 
-static Value clockNative(const uint8_t argCount, const Value* args) {
-  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+static bool clockNative(const uint8_t argCount, Value* args) {
+  args[-1] = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+  return true;
 }
 
 /**
@@ -60,9 +61,10 @@ static void runtimeError(const char* format, ...) {
   resetStack();
 }
 
-static void defineNative(const char* name, NativeFn function) {
+static void defineNative(const char* name, const NativeFn function,
+                         const uint32_t arity) {
   push(OBJ_VAL(copyString(name, strlen(name))));
-  push(OBJ_VAL(newNative(function)));
+  push(OBJ_VAL(newNative(function, arity)));
 
   ObjString* identifier = AS_STRING(vm.stack[0]);
   writeGlobalVarArray(&vm.globalValues,
@@ -81,7 +83,7 @@ void initVM() {
   initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
 
-  defineNative("clock", clockNative);
+  defineNative("clock", clockNative, 0);
 }
 
 void freeVM() {
@@ -132,18 +134,28 @@ static bool call(ObjFunction* function, const uint8_t argCount) {
   return true;
 }
 
+static bool callNative(const ObjNative* native, const uint8_t argCount) {
+  if (argCount != native->arity) {
+    runtimeError("Expected %d arguments but got %d", native->arity, argCount);
+    return false;
+  }
+
+  if (native->function(argCount, vm.stackTop - argCount)) {
+    vm.stackTop -= argCount;
+    return true;
+  } else {
+    runtimeError(AS_CSTRING(vm.stackTop[-argCount - 1]));
+    return false;
+  }
+}
+
 static bool callValue(const Value callee, const uint8_t argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
     case OBJ_FUNCTION:
       return call(AS_FUNCTION(callee), argCount);
-    case OBJ_NATIVE: {
-      NativeFn native = AS_NATIVE(callee);
-      Value result = native(argCount, vm.stackTop - argCount);
-      vm.stackTop -= argCount + 1;
-      push(result);
-      return true;
-    }
+    case OBJ_NATIVE:
+      return callNative(AS_NATIVE(callee), argCount);
     default:
       break; // Non-callable object type
     }

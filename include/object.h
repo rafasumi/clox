@@ -25,7 +25,7 @@
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
-#define AS_NATIVE(value) (((ObjNative*)AS_OBJ(value))->function)
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJ(value))
 
 /**
  * \def AS_STRING(value)
@@ -65,10 +65,11 @@ typedef struct {
   ObjString* name;
 } ObjFunction;
 
-typedef Value (*NativeFn)(const uint8_t argCount, const Value* args);
+typedef bool (*NativeFn)(const uint8_t argCount, Value* args);
 
 typedef struct {
   Obj obj;
+  uint32_t arity;
   NativeFn function;
 } ObjNative;
 
@@ -84,7 +85,7 @@ struct ObjString {
 };
 
 ObjFunction* newFunction();
-ObjNative* newNative(NativeFn function);
+ObjNative* newNative(NativeFn function, const uint32_t arity);
 
 /**
  * \brief Allocates an ObjString and takes ownership of an already allocated
