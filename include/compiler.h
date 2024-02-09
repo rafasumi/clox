@@ -9,12 +9,13 @@
 
 /**
  * \brief Compiles a string of source code into a chunk of bytecode to be
- * executed by the clox virtual machine
+ * executed by the clox virtual machine.
+ *
+ * The compiled chunk is part of a function.
  *
  * \param source Pointer to the source code
- * \param chunk Pointer to the Chunk where the bytecodes must be added
  *
- * \return Boolean value that indicates if the compiling process was successful
+ * \return Pointer to the function that was compiled
  */
 ObjFunction* compile(const char* source);
 

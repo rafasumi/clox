@@ -12,18 +12,43 @@
 #include "debug.h"
 #endif
 
+#include <math.h>
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
-#include <math.h>
 
 VM vm;
 
+/**
+ * \brief Implementation of the "clock" native function.
+ *
+ * This function returns the elapsed time since the program started running, in
+ * seconds.
+ *
+ * \param argCount Number of arguments that were passed to the function
+ * \param args Pointer to the value stack, where the arguments reside. The value
+ * of args[-1] is set to the return value of the function, or to an error
+ * message if there were any errors.
+ *
+ * \return Boolean values that indicates if the function was successful.
+ */
 static bool clockNative(const uint8_t argCount, Value* args) {
   args[-1] = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
   return true;
 }
 
+/**
+ * \brief Implementation of the "sqrt" native function.
+ *
+ * This function takes one numeric argument and returns its square root.
+ *
+ * \param argCount Number of arguments that were passed to the function
+ * \param args Pointer to the value stack, where the arguments reside. The value
+ * of args[-1] is set to the return value of the function, or to an error
+ * message if there were any errors.
+ *
+ * \return Boolean values that indicates if the function was successful.
+ */
 static bool sqrtNative(const uint8_t argCount, Value* args) {
   if (!IS_NUMBER(args[0])) {
     args[-1] = OBJ_VAL(copyString("Argument must be a number!", 26));
@@ -72,6 +97,14 @@ static void runtimeError(const char* format, ...) {
   resetStack();
 }
 
+/**
+ * \brief Helper function used to define a new native function.
+ *
+ * \param name Name of the native function
+ * \param function Pointer to the C function that implements it
+ * \param arity Number of expected parameters
+ *
+ */
 static void defineNative(const char* name, const NativeFn function,
                          const uint32_t arity) {
   push(OBJ_VAL(copyString(name, strlen(name))));
@@ -127,6 +160,17 @@ static Value peek(const int32_t distance) {
   return vm.stackTop[-1 - distance];
 }
 
+/**
+ * \brief Function used to prepare the VM to execute a Lox function.
+ *
+ * This function adds a new CallFrame to the call stack with the appropriate
+ * attributes.
+ *
+ * \param function Pointer to the function's object
+ * \param argCount The number of arguments that were passed to the function
+ *
+ * \return Boolean value that indicates if there were any errors.
+ */
 static bool call(ObjFunction* function, const uint8_t argCount) {
   if (argCount != function->arity) {
     runtimeError("Expected %d arguments but got %d", function->arity, argCount);
@@ -146,6 +190,14 @@ static bool call(ObjFunction* function, const uint8_t argCount) {
   return true;
 }
 
+/**
+ * \brief Function used to execute a call to a native function.
+ *
+ * \param native Pointer to the native's function object
+ * \param argCount The number of arguments that were passed to the function
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
 static bool callNative(const ObjNative* native, const uint8_t argCount) {
   if (argCount != native->arity) {
     runtimeError("Expected %d arguments but got %d", native->arity, argCount);
@@ -161,6 +213,16 @@ static bool callNative(const ObjNative* native, const uint8_t argCount) {
   }
 }
 
+/**
+ * \brief Function used to execute a function call.
+ *
+ * The callee can only be called if it is a callable object type.
+ *
+ * \param callee The callee's value in the value stack.
+ * \param argCount The number of arguments that were passed to the function
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
 static bool callValue(const Value callee, const uint8_t argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {

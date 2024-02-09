@@ -119,6 +119,11 @@ ObjString* copyString(const char* chars, const size_t length) {
   return allocateString(heapChars, length, hash);
 }
 
+/**
+ * \brief Auxiliary function used to print a Lox function
+ *
+ * \param function Pointer to the function
+ */
 static void printFunction(ObjFunction* function) {
   if (function->name == NULL) {
     printf("<script>");

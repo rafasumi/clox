@@ -62,8 +62,8 @@ typedef enum {
                        the stack is false. It also pops the value in the stack*/
   OP_JUMP_IF_FALSE_NP, /**< Jumps to another instruction if the value at the top
                        of the stack is false */
-  OP_LOOP, /**< Unconditionally jumps to a previous instruction in the chunk */
-  OP_CALL,
+  OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
+  OP_CALL,  /**< Invokes a function that is currently in the stack */
   OP_RETURN /**< Returns from the current function */
 } OpCode;
 

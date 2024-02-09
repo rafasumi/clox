@@ -37,6 +37,10 @@ typedef struct {
 #define UNDEFINED_GLOBAL(identifier, isConst)                                  \
   ((GlobalVar){identifier, UNDEFINED_VAL, isConst})
 
+/**
+ * \def UNDEFINED_GLOBAL(identifier, value isConst)
+ * \brief Helper macro that creates a global variable
+ */
 #define NEW_GLOBAL(identifier, value, isConst)                                 \
   ((GlobalVar){identifier, value, isConst})
 

@@ -11,6 +11,10 @@
 #include "table.h"
 #include "value.h"
 
+/**
+ * \def FRAMES_MAX
+ * \brief Maximum size of the call stack.
+ */
 #define FRAMES_MAX 64
 
 /**
@@ -19,10 +23,15 @@
  */
 #define STACK_MAX UINT16_COUNT
 
+/**
+ * \struct CallFrame
+ * \brief Represents the call frame of a single ongoing function call
+ */
 typedef struct {
-  ObjFunction* function;
-  uint8_t* ip;
-  Value* slots;
+  ObjFunction* function; /**< Pointer to the called function */
+  uint8_t* ip;           /**< Instruction pointer for the function's chunk */
+  Value* slots; /**< Pointer to the first slot in the value stack that can be
+                   used by the function */
 } CallFrame;
 
 /**
@@ -31,8 +40,8 @@ typedef struct {
  * necessary attributes.
  */
 typedef struct {
-  CallFrame frames[FRAMES_MAX];
-  uint32_t frameCount;
+  CallFrame frames[FRAMES_MAX]; /**< Call stack used to manage function calls */
+  uint32_t frameCount;          /**< Number of ongoing function calls */
   Value stack[STACK_MAX]; /**< Value stack used to manage temporary values */
   Value* stackTop;        /**< Pointer to the top of the stack */
   Table globalNames;      /**< Table of defined global identifiers */

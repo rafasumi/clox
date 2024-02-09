@@ -82,16 +82,24 @@ typedef struct {
   bool isConst;  /**< Flag that indicates if it is a constant variable */
 } Local;
 
-typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+/**
+ * \enum Function type
+ * \brief Enum type for the different types of functions
+ */
+typedef enum {
+  TYPE_FUNCTION, /**< Actual Lox Function */
+  TYPE_SCRIPT    /**< Top-level code, which is represented as a function */
+} FunctionType;
 
 /**
  * \struct Compiler
  * \brief Strucure used to store relevant state for the clox compiler
  */
 typedef struct Compiler {
-  struct Compiler* enclosing;
-  ObjFunction* function;
-  FunctionType type;
+  struct Compiler*
+      enclosing; /**< Pointer to the compiler of the enclosing function */
+  ObjFunction* function; /**< Pointer to the function being compiled */
+  FunctionType type;     /**< Type of the function being currently compiled */
 
   Local locals[UINT16_COUNT]; /**< Array used to store local variables */
   uint32_t localCount; /**< Current number of local variables in locals */
@@ -385,11 +393,13 @@ static void patchJump(const uint32_t offset) {
 }
 
 /**
- * \brief Initializes the compiler's state.
+ * \brief Initializes the compiler's for a new function.
  *
  * \param compiler Pointer to the compiler's state struct
+ * \param type Type of the function that will be compiled
+ *
  */
-static void initCompiler(Compiler* compiler, FunctionType type) {
+static void initCompiler(Compiler* compiler, const FunctionType type) {
   compiler->enclosing = current;
   compiler->function = NULL;
   compiler->type = type;
@@ -411,9 +421,10 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 }
 
 /**
- * \brief Wraps up the compiling process. In debug mode, it will also
- * disassemble the compiled chunk
+ * \brief Wraps up the compiling process for the current function. In debug
+ * mode, it will also disassemble the compiled chunk
  *
+ * \return Pointer to the compiled function
  */
 static ObjFunction* endCompiler() {
   emitReturn();
@@ -512,6 +523,11 @@ static void binary(const bool canAssign) {
   }
 }
 
+/**
+ * \brief Parses the argument list of a function call.
+ *
+ * \return The number of arguments that were passed to the function.
+ */
 static uint8_t argumentList() {
   uint8_t argCount = 0;
   if (!check(TOKEN_RIGHT_PAREN)) {
@@ -529,6 +545,10 @@ static uint8_t argumentList() {
   return argCount;
 }
 
+/**
+ * \brief Function to parse a function call
+ *
+ */
 static void call(const bool canAssign) {
   uint8_t argCount = argumentList();
   emitBytes(OP_CALL, argCount);
@@ -1038,7 +1058,16 @@ static void block() {
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
-static void function(FunctionType type) {
+/**
+ * \brief Helper function to parse a function declaration.
+ * 
+ * In order to compile this new function, a new compiler will be initialized and
+ * used to compile it. A new scope is also initialized.
+ * 
+ * \param type Type of the function that will be parsed
+ *
+ */
+static void function(const FunctionType type) {
   Compiler compiler;
   initCompiler(&compiler, type);
   beginScope();
@@ -1062,6 +1091,10 @@ static void function(FunctionType type) {
   emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
 }
 
+/**
+ * \brief Parses a function declaration that uses the "fun" keyword.
+ *
+ */
 static void funDeclaration() {
   uint8_t global = parseVariable("Expect function name.", true);
   markInitialized();
@@ -1194,6 +1227,10 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
+/**
+ * \brief Function used to parse a return statement.
+ *
+ */
 static void returnStatement() {
   if (current->type == TYPE_SCRIPT)
     error("Can't return from top-level code.");
