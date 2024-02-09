@@ -5,6 +5,7 @@
 #ifndef CLOX_OBJECT_H
 #define CLOX_OBJECT_H
 
+#include "chunk.h"
 #include "common.h"
 #include "value.h"
 
@@ -15,10 +16,34 @@
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 /**
+ * \def IS_FUNCTION(value)
+ * \brief Helper macro used to determine if a given value is a Lox function
+ */
+#define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
+
+/**
+ * \def IS_NATIVE(value)
+ * \brief Helper macro used to determine if a given value is a native function
+ */
+#define IS_NATIVE(value) isObjType(value, OBJ_NATIVE)
+
+/**
  * \def IS_STRING(value)
  * \brief Helper macro used to determine if a given value is a string
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
+
+/**
+ * \def AS_FUNCTION(value)
+ * \brief Helper macro used to get an object value as a ObjFunction
+ */
+#define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
+
+/**
+ * \def AS_NATIVE(value)
+ * \brief Helper macro used to get an object value as a ObjNative
+ */
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJ(value))
 
 /**
  * \def AS_STRING(value)
@@ -37,7 +62,9 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
-  OBJ_STRING, /**< String object */
+  OBJ_FUNCTION, /**< Lox function */
+  OBJ_NATIVE,   /**< Native function */
+  OBJ_STRING,   /**< String object */
 } ObjType;
 
 /**
@@ -50,6 +77,33 @@ struct Obj {
 };
 
 /**
+ * \struct ObjFunction
+ * \brief Struct used to represent a Lox bytecode function
+ */
+typedef struct {
+  Obj obj;         /**< Obj field needed for "struct inheritance" */
+  uint32_t arity;  /**< Number of parameters that the function expects */
+  Chunk chunk;     /**< Chunk of bytecode associated with the function */
+  ObjString* name; /**< Name of the function, if there is any */
+} ObjFunction;
+
+/**
+ * \var NativeFn
+ * \brief Type definition for a native function that can be called in Lox
+ */
+typedef bool (*NativeFn)(const uint8_t argCount, Value* args);
+
+/**
+ * \struct ObjNative
+ * \brief Struct used to represent a native function
+ */
+typedef struct {
+  Obj obj;           /**< Obj field needed for "struct inheritance" */
+  uint32_t arity;    /**< Number of parameters that the function expects */
+  NativeFn function; /**< Pointer to the C function */
+} ObjNative;
+
+/**
  * \struct ObjString
  * \brief Struct used to represent a string object
  */
@@ -59,6 +113,23 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+/**
+ * \brief Creates an empty ObjFunction object.
+ *
+ * \return Pointer to the created ObjFunction
+ */
+ObjFunction* newFunction();
+
+/**
+ * \brief Creates a new ObjNative object.
+ *
+ * \param function Pointer to the C function
+ * \param arity Expected number of parameters
+ *
+ * \return Pointer to the created ObjNative
+ */
+ObjNative* newNative(const NativeFn function, const uint32_t arity);
 
 /**
  * \brief Allocates an ObjString and takes ownership of an already allocated

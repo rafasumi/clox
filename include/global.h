@@ -38,6 +38,13 @@ typedef struct {
   ((GlobalVar){identifier, UNDEFINED_VAL, isConst})
 
 /**
+ * \def UNDEFINED_GLOBAL(identifier, value isConst)
+ * \brief Helper macro that creates a global variable
+ */
+#define NEW_GLOBAL(identifier, value, isConst)                                 \
+  ((GlobalVar){identifier, value, isConst})
+
+/**
  * \brief Initializes the resources of a given global values array.
  *
  * \param array Array to be initialized

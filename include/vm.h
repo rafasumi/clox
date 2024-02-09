@@ -7,8 +7,15 @@
 
 #include "chunk.h"
 #include "global.h"
+#include "object.h"
 #include "table.h"
 #include "value.h"
+
+/**
+ * \def FRAMES_MAX
+ * \brief Maximum size of the call stack.
+ */
+#define FRAMES_MAX 64
 
 /**
  * \def STACK_MAX
@@ -17,13 +24,24 @@
 #define STACK_MAX UINT16_COUNT
 
 /**
+ * \struct CallFrame
+ * \brief Represents the call frame of a single ongoing function call
+ */
+typedef struct {
+  ObjFunction* function; /**< Pointer to the called function */
+  uint8_t* ip;           /**< Instruction pointer for the function's chunk */
+  Value* slots; /**< Pointer to the first slot in the value stack that can be
+                   used by the function */
+} CallFrame;
+
+/**
  * \struct VM
  * \brief Structure that represents the clox virtual machine and contains its
  * necessary attributes.
  */
 typedef struct {
-  Chunk* chunk;           /**< Pointer to the chunk of bytecode instructions */
-  uint8_t* ip;            /**< Pointer to the next instruction to be executed */
+  CallFrame frames[FRAMES_MAX]; /**< Call stack used to manage function calls */
+  uint32_t frameCount;          /**< Number of ongoing function calls */
   Value stack[STACK_MAX]; /**< Value stack used to manage temporary values */
   Value* stackTop;        /**< Pointer to the top of the stack */
   Table globalNames;      /**< Table of defined global identifiers */
