@@ -39,6 +39,8 @@ typedef enum {
                     8-bit offset */
   OP_SET_GLOBAL_LONG, /**< Updates the value of a defined global variable with a
                          24-bit offset */
+  OP_GET_UPVALUE,
+  OP_SET_UPVALUE,
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -64,6 +66,7 @@ typedef enum {
                        of the stack is false */
   OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_CALL,  /**< Invokes a function that is currently in the stack */
+  OP_CLOSURE,
   OP_RETURN /**< Returns from the current function */
 } OpCode;
 

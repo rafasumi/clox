@@ -15,6 +15,8 @@
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
+#define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
+
 /**
  * \def IS_FUNCTION(value)
  * \brief Helper macro used to determine if a given value is a Lox function
@@ -32,6 +34,8 @@
  * \brief Helper macro used to determine if a given value is a string
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
+
+#define AS_CLOSURE(value) ((ObjClosure*)AS_OBJ(value))
 
 /**
  * \def AS_FUNCTION(value)
@@ -62,9 +66,11 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
+  OBJ_CLOSURE,
   OBJ_FUNCTION, /**< Lox function */
   OBJ_NATIVE,   /**< Native function */
   OBJ_STRING,   /**< String object */
+  OBJ_UPVALUE
 } ObjType;
 
 /**
@@ -83,6 +89,7 @@ struct Obj {
 typedef struct {
   Obj obj;         /**< Obj field needed for "struct inheritance" */
   uint32_t arity;  /**< Number of parameters that the function expects */
+  uint16_t upvalueCount;
   Chunk chunk;     /**< Chunk of bytecode associated with the function */
   ObjString* name; /**< Name of the function, if there is any */
 } ObjFunction;
@@ -103,6 +110,18 @@ typedef struct {
   NativeFn function; /**< Pointer to the C function */
 } ObjNative;
 
+typedef struct ObjUpvalue {
+  Obj obj;
+  Value* location;
+} ObjUpvalue;
+
+typedef struct {
+  Obj obj;
+  ObjFunction* function;
+  ObjUpvalue** upvalues;
+  uint16_t upvalueCount;
+} ObjClosure;
+
 /**
  * \struct ObjString
  * \brief Struct used to represent a string object
@@ -113,6 +132,8 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+ObjClosure* newClosure(ObjFunction* function);
 
 /**
  * \brief Creates an empty ObjFunction object.
@@ -158,6 +179,8 @@ ObjString* takeString(char* chars, const size_t length);
  * \return Pointer to the allocated ObjString
  */
 ObjString* copyString(const char* chars, const size_t length);
+
+ObjUpvalue* newUpvalue(Value* slot);
 
 /**
  * \brief Prints an object value.

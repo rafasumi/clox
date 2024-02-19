@@ -28,7 +28,7 @@
  * \brief Represents the call frame of a single ongoing function call
  */
 typedef struct {
-  ObjFunction* function; /**< Pointer to the called function */
+  ObjClosure* closure;
   uint8_t* ip;           /**< Instruction pointer for the function's chunk */
   Value* slots; /**< Pointer to the first slot in the value stack that can be
                    used by the function */

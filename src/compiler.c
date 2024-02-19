@@ -82,6 +82,11 @@ typedef struct {
   bool isConst;  /**< Flag that indicates if it is a constant variable */
 } Local;
 
+typedef struct {
+  uint8_t index;
+  bool isLocal;
+} Upvalue;
+
 /**
  * \enum Function type
  * \brief Enum type for the different types of functions
@@ -103,6 +108,7 @@ typedef struct Compiler {
 
   Local locals[UINT16_COUNT]; /**< Array used to store local variables */
   uint32_t localCount; /**< Current number of local variables in locals */
+  Upvalue upvalues[UINT8_COUNT];
   int32_t scopeDepth;  /**< Scope depth of the code being compiled */
 } Compiler;
 
@@ -748,7 +754,7 @@ static bool identifiersEqual(const Token* a, const Token* b) {
  *
  * \return Offset of the local variable in the locals array
  */
-static uint32_t resolveLocal(Compiler* compiler, const Token* name,
+static int32_t resolveLocal(Compiler* compiler, const Token* name,
                              bool* isConst) {
   for (int32_t i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
@@ -760,6 +766,43 @@ static uint32_t resolveLocal(Compiler* compiler, const Token* name,
 
       return i;
     }
+  }
+
+  return -1;
+}
+
+static uint8_t addUpvalue(Compiler* compiler, const uint8_t index, const bool isLocal) {
+  int16_t upvalueCount = compiler->function->upvalueCount;
+
+  for (uint16_t i = 0; i < upvalueCount; ++i) {
+    Upvalue* upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->isLocal == isLocal)
+      return i;
+  }
+
+  if (upvalueCount == UINT8_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+
+  return compiler->function->upvalueCount++;
+}
+
+static int32_t resolveUpvalue(Compiler* compiler, const Token* name, bool* isConst) {
+  if (compiler->enclosing == NULL)
+    return -1;
+
+  int32_t local = resolveLocal(compiler->enclosing, name, isConst);
+  if (local != -1) {
+    return addUpvalue(compiler, (uint8_t)local, true);
+  }
+
+  int32_t upvalue = resolveUpvalue(compiler->enclosing, name, isConst);
+  if (upvalue != -1) {
+    return addUpvalue(compiler, (uint8_t)upvalue, false);
   }
 
   return -1;
@@ -830,6 +873,9 @@ static void namedVariable(const Token name, const bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+  } else if ((arg = resolveUpvalue(current, &name, &isConst)) != -1) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
   } else {
     // If can't be resolved as a local, than it is resolved as a global
 
@@ -1088,7 +1134,13 @@ static void function(const FunctionType type) {
   block();
 
   ObjFunction* function = endCompiler();
-  emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+  // Should refactor this to use a _LONG version
+  emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+
+  for (uint32_t i = 0; i < function->upvalueCount; ++i) {
+    emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler.upvalues[i].index);
+  }
 }
 
 /**

@@ -24,6 +24,6 @@ void disassembleChunk(const Chunk* chunk, const char* name);
  *
  * \return Offset of the next instruction
  */
-size_t disassembleInstruction(const Chunk* chunk, const size_t offset);
+size_t disassembleInstruction(const Chunk* chunk, size_t offset);
 
 #endif

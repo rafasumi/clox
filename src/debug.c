@@ -3,6 +3,7 @@
 */
 
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 #include "vm.h"
 
@@ -173,7 +174,7 @@ static size_t globalLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
-size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
+size_t disassembleInstruction(const Chunk* chunk, size_t offset) {
   printf("%04ld ", offset);
 
   uint32_t line = getLine(chunk, offset);
@@ -218,6 +219,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_SET_GLOBAL", chunk, offset);
   case OP_SET_GLOBAL_LONG:
     return globalLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
+  case OP_GET_UPVALUE:
+    return byteInstruction("OP_GET_UPVALUE", chunk, offset);
+  case OP_SET_UPVALUE:
+    return byteInstruction("OP_SET_UPVALUE", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
@@ -254,6 +259,24 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
   case OP_CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  case OP_CLOSURE: {
+    offset++;
+    uint8_t constantOffset = chunk->code[offset++];
+    printf("%-21s %4d ", "OP_CLOSURE", constantOffset);
+    printValue(chunk->constants.values[constantOffset]);
+    printf("\n");
+
+    ObjFunction* function =
+        AS_FUNCTION(chunk->constants.values[constantOffset]);
+    for (int j = 0; j < function->upvalueCount; j++) {
+      int isLocal = chunk->code[offset++];
+      int index = chunk->code[offset++];
+      printf("%04ld    |                          %s %d\n", offset - 2,
+             isLocal ? "local" : "upvalue", index);
+    }
+
+    return offset;
+  }
   case OP_RETURN:
     return simpleInstruction("OP_RETURN", offset);
   default:

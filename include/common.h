@@ -16,6 +16,8 @@
  */
 #define UINT24_MAX (UINT32_MAX >> 8)
 
+#define UINT8_COUNT (UINT8_MAX + 1)
+
 /**
  * \def UINT16_COUNT
  * \brief Maximum size for an array with 16-bit indexes
