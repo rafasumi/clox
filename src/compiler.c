@@ -80,6 +80,7 @@ typedef struct {
   Token name;    /**< Name of the variable */
   int32_t depth; /**< Scope depth of where the variable was declared */
   bool isConst;  /**< Flag that indicates if it is a constant variable */
+  bool isCaptured;
 } Local;
 
 typedef struct {
@@ -424,6 +425,7 @@ static void initCompiler(Compiler* compiler, const FunctionType type) {
   local->name.start = "";
   local->name.length = 0;
   local->isConst = false;
+  local->isCaptured = false;
 }
 
 /**
@@ -467,7 +469,11 @@ static void endScope() {
 
   while (current->localCount > 0 &&
          current->locals[current->localCount - 1].depth > current->scopeDepth) {
-    emitByte(OP_POP);
+    if (current->locals[current->localCount - 1].isCaptured) {
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      emitByte(OP_POP);
+    }
     current->localCount--;
   }
 }
@@ -797,6 +803,7 @@ static int32_t resolveUpvalue(Compiler* compiler, const Token* name, bool* isCon
 
   int32_t local = resolveLocal(compiler->enclosing, name, isConst);
   if (local != -1) {
+    compiler->enclosing->locals[local].isCaptured = true;
     return addUpvalue(compiler, (uint8_t)local, true);
   }
 
@@ -825,6 +832,7 @@ static void addLocal(const Token name, const bool isConst) {
   local->name = name;
   local->depth = -1;
   local->isConst = isConst;
+  local->isCaptured = false;
 }
 
 /**

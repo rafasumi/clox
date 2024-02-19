@@ -67,6 +67,7 @@ typedef enum {
   OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_CALL,  /**< Invokes a function that is currently in the stack */
   OP_CLOSURE,
+  OP_CLOSE_UPVALUE,
   OP_RETURN /**< Returns from the current function */
 } OpCode;
 

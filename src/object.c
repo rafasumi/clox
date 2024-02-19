@@ -135,7 +135,9 @@ ObjString* copyString(const char* chars, const size_t length) {
 
 ObjUpvalue* newUpvalue(Value* slot) {
   ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+  upvalue->closed = UNDEFINED_VAL;
   upvalue->location = slot;
+  upvalue->next = NULL;
 
   return upvalue;
 }
