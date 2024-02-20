@@ -21,11 +21,11 @@ typedef enum {
   OP_FALSE,         /**< Loads a false boolean value to the stack */
   OP_POP,           /**< Pops a value from the stack */
   OP_GET_LOCAL, /**< Loads a local variable to the stack with an 8-bit offset */
-  OP_GET_LOCAL_LONG, /**< Loads a local variable to the stack with an 24-bit
+  OP_GET_LOCAL_SHORT, /**< Loads a local variable to the stack with an 24-bit
                         offset */
   OP_SET_LOCAL,      /**< Updates the value of a defined local variable with an
                          8-bit offset */
-  OP_SET_LOCAL_LONG, /**< Updates the value of a defined local variable with an
+  OP_SET_LOCAL_SHORT, /**< Updates the value of a defined local variable with an
                     24-bit offset */
   OP_GET_GLOBAL, /**< Loads a global variable to the stack with an 8-bit offset
                   */
@@ -67,6 +67,7 @@ typedef enum {
   OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_CALL,  /**< Invokes a function that is currently in the stack */
   OP_CLOSURE,
+  OP_CLOSURE_LONG,
   OP_CLOSE_UPVALUE,
   OP_RETURN /**< Returns from the current function */
 } OpCode;

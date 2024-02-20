@@ -16,7 +16,7 @@
  */
 #define UINT24_MAX (UINT32_MAX >> 8)
 
-#define UINT8_COUNT (UINT8_MAX + 1)
+#define UINT10_COUNT ((UINT16_MAX >> 6) + 1)
 
 /**
  * \def UINT16_COUNT

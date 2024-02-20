@@ -249,7 +249,7 @@ static ObjUpvalue* captureUpvalue(Value* local) {
     prevUpvalue = upvalue;
     upvalue = upvalue->next;
   }
-  
+
   if (upvalue != NULL && upvalue->location == local)
     return upvalue;
 
@@ -272,7 +272,6 @@ static void closeUpvalues(const Value* last) {
     upvalue->location = &upvalue->closed;
     vm.openUpvalues = upvalue->next;
   }
-  
 }
 
 /**
@@ -360,6 +359,24 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
 
   var->value = peek(0);
   return true;
+}
+
+static uint8_t* defineClosure(ObjFunction* function, const CallFrame* frame,
+                          uint8_t* ip) {
+  ObjClosure* closure = newClosure(function);
+  push(OBJ_VAL(closure));
+
+  for (uint16_t i = 0; i < closure->upvalueCount; ++i) {
+    uint8_t isLocal = (*(ip++));
+    uint8_t index = (*(ip++));
+    if (isLocal) {
+      closure->upvalues[i] = captureUpvalue(frame->slots + index);
+    } else {
+      closure->upvalues[i] = frame->closure->upvalues[index];
+    }
+  }
+
+  return ip;
 }
 
 /**
@@ -459,8 +476,8 @@ static InterpretResult run() {
       push(frame->slots[slot]);
       break;
     }
-    case OP_GET_LOCAL_LONG: {
-      uint32_t slot = READ_LONG_OPERAND();
+    case OP_GET_LOCAL_SHORT: {
+      uint16_t slot = READ_SHORT();
       push(frame->slots[slot]);
       break;
     }
@@ -469,8 +486,8 @@ static InterpretResult run() {
       frame->slots[slot] = peek(0);
       break;
     }
-    case OP_SET_LOCAL_LONG: {
-      uint32_t slot = READ_LONG_OPERAND();
+    case OP_SET_LOCAL_SHORT: {
+      uint16_t slot = READ_SHORT();
       frame->slots[slot] = peek(0);
       break;
     }
@@ -602,22 +619,12 @@ static InterpretResult run() {
       break;
       ;
     }
-    case OP_CLOSURE: {
-      ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
-      ObjClosure* closure = newClosure(function);
-      push(OBJ_VAL(closure));
-
-      for (uint16_t i = 0; i < closure->upvalueCount; ++i) {
-        uint8_t isLocal = READ_BYTE();
-        uint8_t index = READ_BYTE();
-        if (isLocal) {
-          closure->upvalues[i] = captureUpvalue(frame->slots + index);
-        } else {
-          closure->upvalues[i] = frame->closure->upvalues[index];
-        }
-      }
+    case OP_CLOSURE:
+      ip = defineClosure(AS_FUNCTION(READ_CONSTANT()), frame, ip);
       break;
-    }
+    case OP_CLOSURE_LONG:
+      ip = defineClosure(AS_FUNCTION(READ_CONSTANT_LONG()), frame, ip);
+      break;
     case OP_CLOSE_UPVALUE:
       closeUpvalues(vm.stackTop - 1);
       pop();
