@@ -168,7 +168,7 @@ static Value peek(const int32_t distance) {
  * This function adds a new CallFrame to the call stack with the appropriate
  * attributes.
  *
- * \param function Pointer to the function's object
+ * \param function Pointer to the function's closure object
  * \param argCount The number of arguments that were passed to the function
  *
  * \return Boolean value that indicates if there were any errors.
@@ -242,6 +242,20 @@ static bool callValue(const Value callee, const uint8_t argCount) {
   return false;
 }
 
+/**
+ * \brief Capture a given local variable as an upvalue.
+ *
+ * The function will create a new ObjUpvalue for this new upvalue if it hasn't
+ * been created already. However, if there's already an upvalue associated with
+ * this local, it will be reused.
+ *
+ * If a new upvalue is created, it is added to the VM's linked-list of open
+ * upvalues.
+ *
+ * \param local Pointer to the local's location in the stack.
+ *
+ * \return Pointer to an ObjUpvalue that is associated with \p local
+ */
 static ObjUpvalue* captureUpvalue(Value* local) {
   ObjUpvalue* prevUpvalue = NULL;
   ObjUpvalue* upvalue = vm.openUpvalues;
@@ -265,6 +279,17 @@ static ObjUpvalue* captureUpvalue(Value* local) {
   return createdUpvalue;
 }
 
+/**
+ * \brief Closes all upvalues that appear in the stack after or in the same
+ * position as \p last.
+ *
+ * In order to close an upvalue, the local's value is copied to the ObjUpvalue
+ * instance that is associated with it. The ObjUpvalue's location field is
+ * updated to point to this new location.
+ *
+ * \param last Pointer to the last local variable whose upvalue must be closed.
+ *
+ */
 static void closeUpvalues(const Value* last) {
   while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
     ObjUpvalue* upvalue = vm.openUpvalues;
@@ -312,7 +337,9 @@ static void concatenate() {
  * offset in the globalValues array. The value is pushed to the stack.
  *
  * \param offset The offset of the variable in the globalValues array
- *
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
  * \return Boolean value that indicates if there were any errors when fetching
  * the variable
  *
@@ -345,7 +372,9 @@ static void defineGlobal(const uint32_t offset) {
  * has already been defined.
  *
  * \param offset The offset of the variable in the globalValues array
- *
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
  * \return Boolean value that indicates if there were any errors
  */
 static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
@@ -361,8 +390,21 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that defines a new closure.
+ *
+ * The function reads all of the closure's upvalues from the stack and updates
+ * the ObjClosure's upvalues array.
+ *
+ * \param function Pointer to the ObjFunction that will be associated with the
+ * closure
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
+ * \return Next position of the instruction pointer
+ */
 static uint8_t* defineClosure(ObjFunction* function, const CallFrame* frame,
-                          uint8_t* ip) {
+                              uint8_t* ip) {
   ObjClosure* closure = newClosure(function);
   push(OBJ_VAL(closure));
 

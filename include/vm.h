@@ -28,8 +28,8 @@
  * \brief Represents the call frame of a single ongoing function call
  */
 typedef struct {
-  ObjClosure* closure;
-  uint8_t* ip;           /**< Instruction pointer for the function's chunk */
+  ObjClosure* closure; /**< Pointer to the ObjClosure of the callee function */
+  uint8_t* ip;         /**< Instruction pointer for the function's chunk */
   Value* slots; /**< Pointer to the first slot in the value stack that can be
                    used by the function */
 } CallFrame;
@@ -47,9 +47,10 @@ typedef struct {
   Table globalNames;      /**< Table of defined global identifiers */
   GlobalVarArray globalValues; /**< Array with values of global variables */
   Table strings; /**< Table of allocated strings, used for string interning */
-  ObjUpvalue* openUpvalues;
-  Obj* objects;  /**< Pointer to the head of the linked-list of heap-allocated
-                    objects */
+  ObjUpvalue* openUpvalues; /**< Pointer to the head of the linked-list of open
+                               upvalues */
+  Obj* objects; /**< Pointer to the head of the linked-list of heap-allocated
+                   objects */
 } VM;
 
 /**

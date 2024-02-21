@@ -42,7 +42,7 @@ ObjClosure* newClosure(ObjFunction* function) {
   for (uint16_t i = 0; i < function->upvalueCount; ++i) {
     upvalues[i] = NULL;
   }
-  
+
   ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
   closure->function = function;
   closure->upvalues = upvalues;

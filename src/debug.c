@@ -50,7 +50,7 @@ static size_t byteInstruction(const char* name, const Chunk* chunk,
 
 /**
  * \brief Display an instruction at a given offset along with the instruction's
- * 24-bit operand.
+ * 16-bit operand.
  *
  * \param name Name of the instruction
  * \param chunk Pointer to the chunk of bytecode that contains the instruction
@@ -173,6 +173,16 @@ static size_t globalLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+/**
+ * \brief Display an instruction that initializes a closure.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param closureOffset The offset of the closure in the chunk's constants array
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t closureInstruction(const char* name, const Chunk* chunk,
                                  const uint32_t closureOffset, size_t offset) {
   printf("%-21s %4d ", name, closureOffset);
@@ -180,9 +190,9 @@ static size_t closureInstruction(const char* name, const Chunk* chunk,
   printf("\n");
 
   ObjFunction* function = AS_FUNCTION(chunk->constants.values[closureOffset]);
-  for (int j = 0; j < function->upvalueCount; j++) {
-    int isLocal = chunk->code[offset++];
-    int index = chunk->code[offset++];
+  for (uint16_t j = 0; j < function->upvalueCount; j++) {
+    uint8_t isLocal = chunk->code[offset++];
+    uint8_t index = chunk->code[offset++];
     printf("%04ld    |                          %s %d\n", offset - 2,
            isLocal ? "local" : "upvalue", index);
   }
