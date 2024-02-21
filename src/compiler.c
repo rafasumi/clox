@@ -109,7 +109,7 @@ typedef struct Compiler {
 
   Local locals[UINT10_COUNT]; /**< Array used to store local variables */
   uint32_t localCount; /**< Current number of local variables in locals */
-  Upvalue upvalues[UINT10_COUNT];
+  Upvalue upvalues[UINT8_COUNT];
   int32_t scopeDepth; /**< Scope depth of the code being compiled */
 } Compiler;
 
@@ -777,15 +777,15 @@ static int32_t resolveLocal(Compiler* compiler, const Token* name,
 
 static uint8_t addUpvalue(Compiler* compiler, const uint8_t index,
                           const bool isLocal) {
-  int16_t upvalueCount = compiler->function->upvalueCount;
+  uint8_t upvalueCount = compiler->function->upvalueCount;
 
-  for (uint16_t i = 0; i < upvalueCount; ++i) {
+  for (uint8_t i = 0; i < upvalueCount; ++i) {
     Upvalue* upvalue = &compiler->upvalues[i];
     if (upvalue->index == index && upvalue->isLocal == isLocal)
       return i;
   }
 
-  if (upvalueCount == UINT10_COUNT) {
+  if (upvalueCount == UINT8_COUNT) {
     error("Too many closure variables in function.");
     return 0;
   }
@@ -796,7 +796,7 @@ static uint8_t addUpvalue(Compiler* compiler, const uint8_t index,
   return compiler->function->upvalueCount++;
 }
 
-static int32_t resolveUpvalue(Compiler* compiler, const Token* name,
+static int16_t resolveUpvalue(Compiler* compiler, const Token* name,
                               bool* isConst) {
   if (compiler->enclosing == NULL)
     return -1;
@@ -804,12 +804,12 @@ static int32_t resolveUpvalue(Compiler* compiler, const Token* name,
   int32_t local = resolveLocal(compiler->enclosing, name, isConst);
   if (local != -1) {
     compiler->enclosing->locals[local].isCaptured = true;
-    return addUpvalue(compiler, (uint8_t)local, true);
+    return (int16_t)addUpvalue(compiler, (uint8_t)local, true);
   }
 
-  int32_t upvalue = resolveUpvalue(compiler->enclosing, name, isConst);
+  int16_t upvalue = resolveUpvalue(compiler->enclosing, name, isConst);
   if (upvalue != -1) {
-    return addUpvalue(compiler, (uint8_t)upvalue, false);
+    return (int16_t)addUpvalue(compiler, (uint8_t)upvalue, false);
   }
 
   return -1;

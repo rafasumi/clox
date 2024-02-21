@@ -237,12 +237,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
   case OP_GET_UPVALUE:
     return byteInstruction("OP_GET_UPVALUE", chunk, offset);
-  case OP_GET_UPVALUE_SHORT:
-    return byteShortInstruction("OP_GET_UPVALUE_SHORT", chunk, offset);
   case OP_SET_UPVALUE:
     return byteInstruction("OP_SET_UPVALUE", chunk, offset);
-  case OP_SET_UPVALUE_SHORT:
-    return byteShortInstruction("OP_SET_UPVALUE_SHORT", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:

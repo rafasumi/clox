@@ -39,10 +39,9 @@ typedef enum {
                     8-bit offset */
   OP_SET_GLOBAL_LONG, /**< Updates the value of a defined global variable with a
                          24-bit offset */
-  OP_GET_UPVALUE_SHORT,
-  OP_GET_UPVALUE,
-  OP_SET_UPVALUE,
-  OP_SET_UPVALUE_SHORT,
+  OP_GET_UPVALUE,     /**< Loads a local variable through its upvalue */
+  OP_SET_UPVALUE, /**< Updates the value of a local variable through its upvalue
+                   */
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
