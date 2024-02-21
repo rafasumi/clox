@@ -3,6 +3,7 @@
 */
 
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 #include "vm.h"
 
@@ -49,7 +50,7 @@ static size_t byteInstruction(const char* name, const Chunk* chunk,
 
 /**
  * \brief Display an instruction at a given offset along with the instruction's
- * 24-bit operand.
+ * 16-bit operand.
  *
  * \param name Name of the instruction
  * \param chunk Pointer to the chunk of bytecode that contains the instruction
@@ -57,13 +58,12 @@ static size_t byteInstruction(const char* name, const Chunk* chunk,
  *
  * \return Offset of the next instruction
  */
-static size_t byteLongInstruction(const char* name, const Chunk* chunk,
-                                  const size_t offset) {
-  uint32_t slot = (chunk->code[offset + 3] << 16) |
-                  (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
+static size_t byteShortInstruction(const char* name, const Chunk* chunk,
+                                   const size_t offset) {
+  uint32_t slot = (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
   printf("%-21s %4d\n", name, slot);
 
-  return offset + 4;
+  return offset + 3;
 }
 
 /**
@@ -173,6 +173,33 @@ static size_t globalLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+/**
+ * \brief Display an instruction that initializes a closure.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param closureOffset The offset of the closure in the chunk's constants array
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
+static size_t closureInstruction(const char* name, const Chunk* chunk,
+                                 const uint32_t closureOffset, size_t offset) {
+  printf("%-21s %4d ", name, closureOffset);
+  printValue(chunk->constants.values[closureOffset]);
+  printf("\n");
+
+  ObjFunction* function = AS_FUNCTION(chunk->constants.values[closureOffset]);
+  for (uint16_t j = 0; j < function->upvalueCount; j++) {
+    uint8_t isLocal = chunk->code[offset++];
+    uint8_t index = chunk->code[offset++];
+    printf("%04ld    |                          %s %d\n", offset - 2,
+           isLocal ? "local" : "upvalue", index);
+  }
+
+  return offset;
+}
+
 size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
   printf("%04ld ", offset);
 
@@ -200,12 +227,12 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_POP", offset);
   case OP_GET_LOCAL:
     return byteInstruction("OP_GET_LOCAL", chunk, offset);
-  case OP_GET_LOCAL_LONG:
-    return byteLongInstruction("OP_GET_LOCAL_LONG", chunk, offset);
+  case OP_GET_LOCAL_SHORT:
+    return byteShortInstruction("OP_GET_LOCAL_SHORT", chunk, offset);
   case OP_SET_LOCAL:
     return byteInstruction("OP_GET_LOCAL", chunk, offset);
-  case OP_SET_LOCAL_LONG:
-    return byteLongInstruction("OP_SET_LOCAL_LONG", chunk, offset);
+  case OP_SET_LOCAL_SHORT:
+    return byteShortInstruction("OP_SET_LOCAL_SHORT", chunk, offset);
   case OP_GET_GLOBAL:
     return globalInstruction("OP_GET_GLOBAL", chunk, offset);
   case OP_GET_GLOBAL_LONG:
@@ -218,6 +245,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_SET_GLOBAL", chunk, offset);
   case OP_SET_GLOBAL_LONG:
     return globalLongInstruction("OP_SET_GLOBAL_LONG", chunk, offset);
+  case OP_GET_UPVALUE:
+    return byteInstruction("OP_GET_UPVALUE", chunk, offset);
+  case OP_SET_UPVALUE:
+    return byteInstruction("OP_SET_UPVALUE", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
@@ -254,6 +285,20 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
   case OP_CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  case OP_CLOSURE: {
+    uint8_t closureOffset = chunk->code[offset + 1];
+    return closureInstruction("OP_CLOSURE", chunk, (uint32_t)closureOffset,
+                              offset + 2);
+  }
+  case OP_CLOSURE_LONG: {
+    uint32_t closureOffset = (chunk->code[offset + 3] << 16) |
+                             (chunk->code[offset + 2] << 8) |
+                             chunk->code[offset + 1];
+    return closureInstruction("OP_CLOSURE_LONG", chunk, closureOffset,
+                              offset + 4);
+  }
+  case OP_CLOSE_UPVALUE:
+    return simpleInstruction("OP_CLOSE_UPVALUE", offset);
   case OP_RETURN:
     return simpleInstruction("OP_RETURN", offset);
   default:

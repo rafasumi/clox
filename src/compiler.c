@@ -77,10 +77,22 @@ typedef struct {
  * \brief Strucure used to represent a local variable in memory
  */
 typedef struct {
-  Token name;    /**< Name of the variable */
-  int32_t depth; /**< Scope depth of where the variable was declared */
-  bool isConst;  /**< Flag that indicates if it is a constant variable */
+  Token name;      /**< Name of the variable */
+  int32_t depth;   /**< Scope depth of where the variable was declared */
+  bool isConst;    /**< Flag that indicates if it is a constant variable */
+  bool isCaptured; /**< Flag that indicates if the variable was captured as an
+                      upvalue */
 } Local;
+
+/**
+ * \struct Upvalue
+ * \brief Strucure used to represent an upvalue
+ */
+typedef struct {
+  uint8_t index; /**< Index of the local variable that the upvalue captures */
+  bool isLocal;  /**< Flag that indicates if this upvalue captures a local
+                    variable or another upvalue */
+} Upvalue;
 
 /**
  * \enum Function type
@@ -100,10 +112,11 @@ typedef struct Compiler {
       enclosing; /**< Pointer to the compiler of the enclosing function */
   ObjFunction* function; /**< Pointer to the function being compiled */
   FunctionType type;     /**< Type of the function being currently compiled */
-
-  Local locals[UINT16_COUNT]; /**< Array used to store local variables */
+  Local locals[UINT10_COUNT]; /**< Array used to store local variables */
   uint32_t localCount; /**< Current number of local variables in locals */
-  int32_t scopeDepth;  /**< Scope depth of the code being compiled */
+  Upvalue upvalues[UINT8_COUNT]; /**< Array that stores upvalues for the
+                                    compiled function */
+  int32_t scopeDepth;            /**< Scope depth of the code being compiled */
 } Compiler;
 
 // --------- Module variables ---------
@@ -368,9 +381,7 @@ static uint32_t makeConstant(const Value value) {
  * \param value Constant value to be added
  */
 static void emitConstant(const Value value) {
-  uint32_t offset = makeConstant(value);
-
-  emitOffsetOperandInstruction(OP_CONSTANT, offset);
+  emitOffsetOperandInstruction(OP_CONSTANT, makeConstant(value));
 }
 
 /**
@@ -418,6 +429,7 @@ static void initCompiler(Compiler* compiler, const FunctionType type) {
   local->name.start = "";
   local->name.length = 0;
   local->isConst = false;
+  local->isCaptured = false;
 }
 
 /**
@@ -461,7 +473,12 @@ static void endScope() {
 
   while (current->localCount > 0 &&
          current->locals[current->localCount - 1].depth > current->scopeDepth) {
-    emitByte(OP_POP);
+    if (current->locals[current->localCount - 1].isCaptured) {
+      // The local isn't popped from the stack if it is used as an upvalue
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      emitByte(OP_POP);
+    }
     current->localCount--;
   }
 }
@@ -744,12 +761,12 @@ static bool identifiersEqual(const Token* a, const Token* b) {
  * \param compiler Pointer to the compiler's state struct
  * \param name Name of the local variable to be resolved
  * \param isConst Pointer to a boolean flag that will be set if the variable is
- * resolved
+ * constant
  *
  * \return Offset of the local variable in the locals array
  */
-static uint32_t resolveLocal(Compiler* compiler, const Token* name,
-                             bool* isConst) {
+static int32_t resolveLocal(Compiler* compiler, const Token* name,
+                            bool* isConst) {
   for (int32_t i = compiler->localCount - 1; i >= 0; --i) {
     Local* local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
@@ -766,6 +783,73 @@ static uint32_t resolveLocal(Compiler* compiler, const Token* name,
 }
 
 /**
+ * \brief Adds a new upvalue to the function's upvalue array, if it wasn't added
+ * already.
+ *
+ * \param compiler Pointer to the compiler's state struct of the target function
+ * \param index Index of the local variable that the upvalue captures
+ * \param isLocal Flag that indicates if this upvalue is a local or another
+ * upvalue
+ *
+ * \return Offset of the upvalue in the function's upvalues array
+ */
+static uint16_t addUpvalue(Compiler* compiler, const uint8_t index,
+                          const bool isLocal) {
+  uint16_t upvalueCount = compiler->function->upvalueCount;
+
+  for (uint16_t i = 0; i < upvalueCount; ++i) {
+    Upvalue* upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->isLocal == isLocal)
+      return i;
+  }
+
+  if (upvalueCount == UINT8_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+
+  return compiler->function->upvalueCount++;
+}
+
+/**
+ * \brief Tries to resolve a variable as an upvalue for a given function.
+ *
+ * To be qualified as an upvalue, the variable must either be a local variable
+ * that was declared in the enclosing function or an upvalue for the enclosing
+ * function.
+ *
+ * \param compiler Pointer to the compiler's state struct of the target function
+ * \param name The variable's name
+ * \param isConst Pointer to a boolean flag that will be set if the variable is
+ * constant
+ *
+ * \return Offset of the upvalue in the function's upvalues array or -1 if it
+ * can't be resolved as un upvalue.
+ */
+static int16_t resolveUpvalue(Compiler* compiler, const Token* name,
+                              bool* isConst) {
+  // No need to resolve if it is top-level code
+  if (compiler->enclosing == NULL)
+    return -1;
+
+  int32_t local = resolveLocal(compiler->enclosing, name, isConst);
+  if (local != -1) {
+    compiler->enclosing->locals[local].isCaptured = true;
+    return (int16_t)addUpvalue(compiler, (uint8_t)local, true);
+  }
+
+  int16_t upvalue = resolveUpvalue(compiler->enclosing, name, isConst);
+  if (upvalue != -1) {
+    return (int16_t)addUpvalue(compiler, (uint8_t)upvalue, false);
+  }
+
+  return -1;
+}
+
+/**
  * \brief Adds a local variable to the locals array.
  *
  * \param name Name of the local variable to be added
@@ -773,7 +857,7 @@ static uint32_t resolveLocal(Compiler* compiler, const Token* name,
  *
  */
 static void addLocal(const Token name, const bool isConst) {
-  if (current->localCount == UINT16_COUNT) {
+  if (current->localCount == UINT10_COUNT) {
     error("Too many variables in function.");
     return;
   }
@@ -782,6 +866,7 @@ static void addLocal(const Token name, const bool isConst) {
   local->name = name;
   local->depth = -1;
   local->isConst = isConst;
+  local->isCaptured = false;
 }
 
 /**
@@ -812,6 +897,46 @@ static void declareVariable(const bool isConst) {
 }
 
 /**
+ * \brief Emits an instruction that manipulates a variable and takes an operand
+ * which is an offset. The target variable may be either a global, a local or an
+ * upvalue.
+ *
+ * The function receives only the 8-bit version of the instruction and assumes
+ * that the 16-bit or 24-bit version will be the next instruction in the OpCode
+ * Enum.
+ *
+ * The function determines which version of the instruction to emit based on the
+ * size of the offset.
+ *
+ * The caller must check whether the offset fits in its target operand size.
+ *
+ * \param instruction Version of the instruction that takes an 8-bit offset
+ * \param offset Offset operand
+ * \param isGlobal Boolean flag that indicates if it is a global variable
+ *
+ */
+static void emitVariableInstruction(const uint8_t instruction,
+                                    const uint32_t offset,
+                                    const bool isGlobal) {
+  if (isGlobal) {
+    emitOffsetOperandInstruction(instruction, offset);
+    return;
+  }
+
+  if (offset <= UINT8_MAX) {
+    emitBytes(instruction, (uint8_t)offset);
+  } else {
+    // It is assumed that the "_SHORT" version of the instruction is immediately
+    // next to it in the OpCode enum
+    emitByte(instruction + 1);
+
+    // 16-bit operand
+    emitBytes((uint8_t)(offset & UINT8_MAX),
+              (uint8_t)((offset >> 8) & UINT8_MAX));
+  }
+}
+
+/**
  * \brief Auxiliary function that parses an expression that uses an identifier.
  *
  * The function determines if the expression will be parsed as an assignment
@@ -825,13 +950,18 @@ static void declareVariable(const bool isConst) {
 static void namedVariable(const Token name, const bool canAssign) {
   uint8_t getOp, setOp;
   bool isConst;
+  bool isGlobal = false;
 
   int32_t arg = resolveLocal(current, &name, &isConst);
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+  } else if ((arg = resolveUpvalue(current, &name, &isConst)) != -1) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
   } else {
     // If can't be resolved as a local, than it is resolved as a global
+    isGlobal = true;
 
     ConstFlag flag = CONST_UNKNOWN;
     arg = identifierConstant(&name, &flag);
@@ -851,9 +981,9 @@ static void namedVariable(const Token name, const bool canAssign) {
 
     expression();
 
-    emitOffsetOperandInstruction(setOp, (uint32_t)arg);
+    emitVariableInstruction(setOp, (uint32_t)arg, isGlobal);
   } else {
-    emitOffsetOperandInstruction(getOp, (uint32_t)arg);
+    emitVariableInstruction(getOp, (uint32_t)arg, isGlobal);
   }
 }
 
@@ -1060,10 +1190,10 @@ static void block() {
 
 /**
  * \brief Helper function to parse a function declaration.
- * 
+ *
  * In order to compile this new function, a new compiler will be initialized and
  * used to compile it. A new scope is also initialized.
- * 
+ *
  * \param type Type of the function that will be parsed
  *
  */
@@ -1088,7 +1218,12 @@ static void function(const FunctionType type) {
   block();
 
   ObjFunction* function = endCompiler();
-  emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+  emitOffsetOperandInstruction(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+
+  for (uint32_t i = 0; i < function->upvalueCount; ++i) {
+    emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler.upvalues[i].index);
+  }
 }
 
 /**

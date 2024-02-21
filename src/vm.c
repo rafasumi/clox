@@ -65,6 +65,7 @@ static bool sqrtNative(const uint8_t argCount, Value* args) {
 static void resetStack() {
   vm.stackTop = vm.stack;
   vm.frameCount = 0;
+  vm.openUpvalues = NULL;
 }
 
 /**
@@ -83,9 +84,10 @@ static void runtimeError(const char* format, ...) {
 
   for (int32_t i = vm.frameCount - 1; i >= 0; --i) {
     CallFrame* frame = &vm.frames[i];
-    ObjFunction* function = frame->function;
+    ObjFunction* function = frame->closure->function;
     size_t instruction = (frame->ip - 1) - function->chunk.code;
-    eprintf("[line %d] in ", getLine(&frame->function->chunk, instruction));
+    eprintf("[line %d] in ",
+            getLine(&frame->closure->function->chunk, instruction));
 
     if (function->name == NULL) {
       eprintf("script\n");
@@ -166,14 +168,15 @@ static Value peek(const int32_t distance) {
  * This function adds a new CallFrame to the call stack with the appropriate
  * attributes.
  *
- * \param function Pointer to the function's object
+ * \param function Pointer to the function's closure object
  * \param argCount The number of arguments that were passed to the function
  *
  * \return Boolean value that indicates if there were any errors.
  */
-static bool call(ObjFunction* function, const uint8_t argCount) {
-  if (argCount != function->arity) {
-    runtimeError("Expected %d arguments but got %d", function->arity, argCount);
+static bool call(ObjClosure* closure, const uint8_t argCount) {
+  if (argCount != closure->function->arity) {
+    runtimeError("Expected %d arguments but got %d", closure->function->arity,
+                 argCount);
     return false;
   }
 
@@ -183,8 +186,8 @@ static bool call(ObjFunction* function, const uint8_t argCount) {
   }
 
   CallFrame* frame = &vm.frames[vm.frameCount++];
-  frame->function = function;
-  frame->ip = function->chunk.code;
+  frame->closure = closure;
+  frame->ip = closure->function->chunk.code;
   frame->slots = vm.stackTop - argCount - 1;
 
   return true;
@@ -226,8 +229,8 @@ static bool callNative(const ObjNative* native, const uint8_t argCount) {
 static bool callValue(const Value callee, const uint8_t argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
-    case OBJ_FUNCTION:
-      return call(AS_FUNCTION(callee), argCount);
+    case OBJ_CLOSURE:
+      return call(AS_CLOSURE(callee), argCount);
     case OBJ_NATIVE:
       return callNative(AS_NATIVE(callee), argCount);
     default:
@@ -237,6 +240,63 @@ static bool callValue(const Value callee, const uint8_t argCount) {
 
   runtimeError("Can only call functions and classes");
   return false;
+}
+
+/**
+ * \brief Capture a given local variable as an upvalue.
+ *
+ * The function will create a new ObjUpvalue for this new upvalue if it hasn't
+ * been created already. However, if there's already an upvalue associated with
+ * this local, it will be reused.
+ *
+ * If a new upvalue is created, it is added to the VM's linked-list of open
+ * upvalues.
+ *
+ * \param local Pointer to the local's location in the stack.
+ *
+ * \return Pointer to an ObjUpvalue that is associated with \p local
+ */
+static ObjUpvalue* captureUpvalue(Value* local) {
+  ObjUpvalue* prevUpvalue = NULL;
+  ObjUpvalue* upvalue = vm.openUpvalues;
+  while (upvalue != NULL && upvalue->location > local) {
+    prevUpvalue = upvalue;
+    upvalue = upvalue->next;
+  }
+
+  if (upvalue != NULL && upvalue->location == local)
+    return upvalue;
+
+  ObjUpvalue* createdUpvalue = newUpvalue(local);
+  createdUpvalue->next = upvalue;
+
+  if (prevUpvalue == NULL) {
+    vm.openUpvalues = createdUpvalue;
+  } else {
+    prevUpvalue->next = createdUpvalue;
+  }
+
+  return createdUpvalue;
+}
+
+/**
+ * \brief Closes all upvalues that appear in the stack after or in the same
+ * position as \p last.
+ *
+ * In order to close an upvalue, the local's value is copied to the ObjUpvalue
+ * instance that is associated with it. The ObjUpvalue's location field is
+ * updated to point to this new location.
+ *
+ * \param last Pointer to the last local variable whose upvalue must be closed.
+ *
+ */
+static void closeUpvalues(const Value* last) {
+  while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    vm.openUpvalues = upvalue->next;
+  }
 }
 
 /**
@@ -277,7 +337,9 @@ static void concatenate() {
  * offset in the globalValues array. The value is pushed to the stack.
  *
  * \param offset The offset of the variable in the globalValues array
- *
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
  * \return Boolean value that indicates if there were any errors when fetching
  * the variable
  *
@@ -310,7 +372,9 @@ static void defineGlobal(const uint32_t offset) {
  * has already been defined.
  *
  * \param offset The offset of the variable in the globalValues array
- *
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
  * \return Boolean value that indicates if there were any errors
  */
 static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
@@ -324,6 +388,37 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
 
   var->value = peek(0);
   return true;
+}
+
+/**
+ * \brief Auxiliary function that defines a new closure.
+ *
+ * The function reads all of the closure's upvalues from the stack and updates
+ * the ObjClosure's upvalues array.
+ *
+ * \param function Pointer to the ObjFunction that will be associated with the
+ * closure
+ * \param frame Pointer to the call frame of the current function
+ * \param ip Instruction pointer
+ * 
+ * \return Next position of the instruction pointer
+ */
+static uint8_t* defineClosure(ObjFunction* function, const CallFrame* frame,
+                              uint8_t* ip) {
+  ObjClosure* closure = newClosure(function);
+  push(OBJ_VAL(closure));
+
+  for (uint16_t i = 0; i < closure->upvalueCount; ++i) {
+    uint8_t isLocal = (*(ip++));
+    uint8_t index = (*(ip++));
+    if (isLocal) {
+      closure->upvalues[i] = captureUpvalue(frame->slots + index);
+    } else {
+      closure->upvalues[i] = frame->closure->upvalues[index];
+    }
+  }
+
+  return ip;
 }
 
 /**
@@ -347,12 +442,13 @@ static InterpretResult run() {
 
 // Read a constant from the chunk based on the 8-bit offset at the bytecode
 // array
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT()                                                        \
+  (frame->closure->function->chunk.constants.values[READ_BYTE()])
 
 // Read a constant from the chunk based on the 24-bit offset at the bytecode
 // array
 #define READ_CONSTANT_LONG()                                                   \
-  (frame->function->chunk.constants.values[READ_LONG_OPERAND()])
+  (frame->closure->function->chunk.constants.values[READ_LONG_OPERAND()])
 
 // Read a string from the constants array with an 8-bit offset
 #define READ_STRING() AS_STRING(READ_CONSTANT())
@@ -389,8 +485,8 @@ static InterpretResult run() {
     }
     printf("\n");
 
-    disassembleInstruction(&frame->function->chunk,
-                           (size_t)(ip - frame->function->chunk.code));
+    disassembleInstruction(&frame->closure->function->chunk,
+                           (size_t)(ip - frame->closure->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -422,8 +518,8 @@ static InterpretResult run() {
       push(frame->slots[slot]);
       break;
     }
-    case OP_GET_LOCAL_LONG: {
-      uint32_t slot = READ_LONG_OPERAND();
+    case OP_GET_LOCAL_SHORT: {
+      uint16_t slot = READ_SHORT();
       push(frame->slots[slot]);
       break;
     }
@@ -432,8 +528,8 @@ static InterpretResult run() {
       frame->slots[slot] = peek(0);
       break;
     }
-    case OP_SET_LOCAL_LONG: {
-      uint32_t slot = READ_LONG_OPERAND();
+    case OP_SET_LOCAL_SHORT: {
+      uint16_t slot = READ_SHORT();
       frame->slots[slot] = peek(0);
       break;
     }
@@ -459,6 +555,16 @@ static InterpretResult run() {
       if (!setGlobal(READ_LONG_OPERAND(), frame, ip))
         return INTERPRET_RUNTIME_ERROR;
       break;
+    case OP_GET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      push(*frame->closure->upvalues[slot]->location);
+      break;
+    }
+    case OP_SET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = peek(0);
+      break;
+    }
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
       break;
@@ -555,8 +661,20 @@ static InterpretResult run() {
       break;
       ;
     }
-    case OP_RETURN:
+    case OP_CLOSURE:
+      ip = defineClosure(AS_FUNCTION(READ_CONSTANT()), frame, ip);
+      break;
+    case OP_CLOSURE_LONG:
+      ip = defineClosure(AS_FUNCTION(READ_CONSTANT_LONG()), frame, ip);
+      break;
+    case OP_CLOSE_UPVALUE:
+      closeUpvalues(vm.stackTop - 1);
+      pop();
+      break;
+    case OP_RETURN: {
       Value result = pop();
+
+      closeUpvalues(frame->slots);
 
       vm.frameCount--;
       if (vm.frameCount == 0) {
@@ -570,6 +688,7 @@ static InterpretResult run() {
       ip = frame->ip;
 
       break;
+    }
     default:
       break;
     }
@@ -591,7 +710,13 @@ InterpretResult interpret(const char* source) {
     return INTERPRET_COMPILE_ERROR;
 
   push(OBJ_VAL(function));
-  call(function, 0);
+
+  ObjClosure* closure = newClosure(function);
+  // We must pop the ObjFunction and push the ObjClosure in order to keep the
+  // GC aware of this heap-allocated object
+  pop();
+  push(OBJ_VAL(closure));
+  call(closure, 0);
 
   InterpretResult result = run();
 

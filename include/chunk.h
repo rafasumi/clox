@@ -21,12 +21,12 @@ typedef enum {
   OP_FALSE,         /**< Loads a false boolean value to the stack */
   OP_POP,           /**< Pops a value from the stack */
   OP_GET_LOCAL, /**< Loads a local variable to the stack with an 8-bit offset */
-  OP_GET_LOCAL_LONG, /**< Loads a local variable to the stack with an 24-bit
+  OP_GET_LOCAL_SHORT, /**< Loads a local variable to the stack with a 16-bit
                         offset */
-  OP_SET_LOCAL,      /**< Updates the value of a defined local variable with an
-                         8-bit offset */
-  OP_SET_LOCAL_LONG, /**< Updates the value of a defined local variable with an
-                    24-bit offset */
+  OP_SET_LOCAL,       /**< Updates the value of a defined local variable with an
+                          8-bit offset */
+  OP_SET_LOCAL_SHORT, /**< Updates the value of a defined local variable with a
+                    16-bit offset */
   OP_GET_GLOBAL, /**< Loads a global variable to the stack with an 8-bit offset
                   */
   OP_GET_GLOBAL_LONG, /**< Loads a global variable to the stack with a 24-bit
@@ -39,6 +39,9 @@ typedef enum {
                     8-bit offset */
   OP_SET_GLOBAL_LONG, /**< Updates the value of a defined global variable with a
                          24-bit offset */
+  OP_GET_UPVALUE,     /**< Loads a local variable through its upvalue */
+  OP_SET_UPVALUE, /**< Updates the value of a local variable through its upvalue
+                   */
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -62,9 +65,16 @@ typedef enum {
                        the stack is false. It also pops the value in the stack*/
   OP_JUMP_IF_FALSE_NP, /**< Jumps to another instruction if the value at the top
                        of the stack is false */
-  OP_LOOP,  /**< Unconditionally jumps to a previous instruction in the chunk */
-  OP_CALL,  /**< Invokes a function that is currently in the stack */
-  OP_RETURN /**< Returns from the current function */
+  OP_LOOP, /**< Unconditionally jumps to a previous instruction in the chunk */
+  OP_CALL, /**< Invokes a function that is currently in the stack */
+  OP_CLOSURE, /**< Defines a closure. It has a variable sized operand, which
+                 depends on the number of upvalues */
+  OP_CLOSURE_LONG,  /**< Defines a closure, while loading it with a 24-bit
+                  offset. It has a variable sized operand, which depends on the
+                  number of upvalues */
+  OP_CLOSE_UPVALUE, /**< Closes all upvalues that appear after a certain point
+                       in the stack */
+  OP_RETURN         /**< Returns from the current function */
 } OpCode;
 
 /**

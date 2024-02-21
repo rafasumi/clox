@@ -16,6 +16,12 @@
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
 /**
+ * \def IS_CLOSURE(value)
+ * \brief Helper macro used to determine if a given value is a closure
+ */
+#define IS_CLOSURE(value) isObjType(value, OBJ_CLOSURE)
+
+/**
  * \def IS_FUNCTION(value)
  * \brief Helper macro used to determine if a given value is a Lox function
  */
@@ -32,6 +38,12 @@
  * \brief Helper macro used to determine if a given value is a string
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
+
+/**
+ * \def AS_CLOSURE(value)
+ * \brief Helper macro used to get an object value as a ObjClosure
+ */
+#define AS_CLOSURE(value) ((ObjClosure*)AS_OBJ(value))
 
 /**
  * \def AS_FUNCTION(value)
@@ -62,9 +74,11 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
+  OBJ_CLOSURE,  /**< Closure object */
   OBJ_FUNCTION, /**< Lox function */
   OBJ_NATIVE,   /**< Native function */
   OBJ_STRING,   /**< String object */
+  OBJ_UPVALUE   /**< Upvalue object */
 } ObjType;
 
 /**
@@ -81,10 +95,11 @@ struct Obj {
  * \brief Struct used to represent a Lox bytecode function
  */
 typedef struct {
-  Obj obj;         /**< Obj field needed for "struct inheritance" */
-  uint32_t arity;  /**< Number of parameters that the function expects */
-  Chunk chunk;     /**< Chunk of bytecode associated with the function */
-  ObjString* name; /**< Name of the function, if there is any */
+  Obj obj;               /**< Obj field needed for "struct inheritance" */
+  uint32_t arity;        /**< Number of parameters that the function expects */
+  uint16_t upvalueCount; /**< Number of upvalues captured by the function */
+  Chunk chunk;           /**< Chunk of bytecode associated with the function */
+  ObjString* name;       /**< Name of the function, if there is any */
 } ObjFunction;
 
 /**
@@ -104,6 +119,33 @@ typedef struct {
 } ObjNative;
 
 /**
+ * \struct ObjUpvalue
+ * \brief Struct used to represent an upvalue. An upvalue refers to a local
+ * variable in an enclosing function, that is captured by a closure.
+ */
+typedef struct ObjUpvalue {
+  Obj obj;         /**< Obj field needed for "struct inheritance" */
+  Value* location; /**< Location of the upvalue in memory. It may be in the
+                      stack (if the upvalue is open) or in the upvalue itself
+                      (if it is closed). */
+  Value closed;    /**< Field that stores the upvalue if it is closed */
+  struct ObjUpvalue* next; /**< Pointer to the next upvalue in the intrusive
+                              linked-list of upvalues */
+} ObjUpvalue;
+
+/**
+ * \struct ObjClosure
+ * \brief Struct used to represent a closure.
+ */
+typedef struct {
+  Obj obj;               /**< Obj field needed for "struct inheritance" */
+  ObjFunction* function; /**< Pointer to the function object associated with the
+                            closure */
+  ObjUpvalue** upvalues; /**< Array of upvalues captured by the closure */
+  uint16_t upvalueCount; /**< Number of upvalues captured by the closure */
+} ObjClosure;
+
+/**
  * \struct ObjString
  * \brief Struct used to represent a string object
  */
@@ -113,6 +155,16 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+/**
+ * \brief Creates an empty ObjClosure object.
+ *
+ * \param function Pointer to the ObjFunction that will be wrapped in the
+ * ObjClosure
+ *
+ * \return Pointer to the created ObjClosure
+ */
+ObjClosure* newClosure(ObjFunction* function);
 
 /**
  * \brief Creates an empty ObjFunction object.
@@ -158,6 +210,15 @@ ObjString* takeString(char* chars, const size_t length);
  * \return Pointer to the allocated ObjString
  */
 ObjString* copyString(const char* chars, const size_t length);
+
+/**
+ * \brief Creates an empty ObjUpvalue object.
+ *
+ * \param slot Pointer to the slot in the stack where the upvalue resides.
+ *
+ * \return Pointer to the created ObjUpvalue
+ */
+ObjUpvalue* newUpvalue(Value* slot);
 
 /**
  * \brief Prints an object value.
