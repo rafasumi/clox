@@ -87,6 +87,7 @@ typedef enum {
  */
 struct Obj {
   ObjType type;     /**< The object type */
+  bool isMarked;
   struct Obj* next; /**< Next object in the linked-list of allocated objects */
 };
 

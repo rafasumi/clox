@@ -52,6 +52,10 @@
  */
 void* reallocate(void* pointer, const size_t oldSize, const size_t newSize);
 
+void markObject(Obj* object);
+void markValue(Value value);
+void collectGarbage();
+
 /**
  * \brief Frees all allocated objects in the virtual machine
  * 

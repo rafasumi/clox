@@ -101,4 +101,7 @@ void tableAddAll(const Table* src, Table* dest);
 ObjString* tableFindString(Table* table, const char* chars, const size_t length,
                            const uint32_t hash);
 
+void tableRemoveWhite(Table* table);
+void markTable(Table* table);
+
 #endif

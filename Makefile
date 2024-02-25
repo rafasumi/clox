@@ -19,6 +19,9 @@ endif
 ifeq ($(MODE),debug)
 	CFLAGS += -O0 -DDEBUG_BYTECODE -DDEBUG_TRACE_EXECUTION -g
 	BUILD_DIR := build/debug
+else ifeq ($(MODE),debug_gc)
+	CFLAGS += -O0 -DDEBUG_STRESS_GC -DDEBUG_LOG_GC -g
+	BUILD_DIR := build/debug
 else
 	CFLAGS += -O3 -flto
 	BUILD_DIR := build/release
