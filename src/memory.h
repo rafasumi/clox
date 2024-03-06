@@ -52,8 +52,30 @@
  */
 void* reallocate(void* pointer, const size_t oldSize, const size_t newSize);
 
+/**
+ * \brief Marks an object as reachable for garbage collection and adds it to the
+ * "gray" stack.
+ *
+ * \param object Pointer to the object
+ * 
+ */
 void markObject(Obj* object);
+
+/**
+ * \brief Marks a value as reachable for garbage collection.
+ * 
+ * The value only needs to be marked if it is an object value. Otherwise, there
+ * is nothing to be done.
+ *
+ * \param value Value to be marked
+ * 
+ */
 void markValue(Value value);
+
+/**
+ * \brief Function that initiates garbage collection.
+ * 
+ */
 void collectGarbage();
 
 /**

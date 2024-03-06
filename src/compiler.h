@@ -19,6 +19,11 @@
  */
 ObjFunction* compile(const char* source);
 
+/**
+ * \brief Marks all function objects used by compilers as reachable for garbage
+ * collection.
+ * 
+ */
 void markCompilerRoots();
 
 #endif

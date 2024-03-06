@@ -12,6 +12,10 @@
 #include "debug.h"
 #endif
 
+/**
+ * \def GC_HEAP_GROWTH_FACTOR
+ * \brief Scaling factor for the threshold of garbage collection
+ */
 #define GC_HEAP_GROWTH_FACTOR 2
 
 void* reallocate(void* pointer, const size_t oldSize, const size_t newSize) {
@@ -69,18 +73,34 @@ void markValue(Value value) {
     markObject(AS_OBJ(value));
 }
 
+/**
+ * \brief Marks all global values as reachable for garbage collection
+ *
+ * \param array Pointer to the array of global values
+ */
 static void markGlobalVarArray(GlobalVarArray* array) {
   for (size_t i = 0; i < array->count; ++i) {
     markValue(array->vars[i].value);
   }
 }
 
+/**
+ * \brief Marks all constant values in use as reachable for garbage collection
+ *
+ * \param array Pointer to the array of constant values
+ */
 static void markArray(ValueArray* array) {
   for (size_t i = 0; i < array->count; ++i) {
     markValue(array->values[i]);
   }
 }
 
+/**
+ * \brief Finishes the process of marking an object by marking all other objects
+ * it references as reachable.
+ *
+ * \param object Pointer to the object
+ */
 static void blackenObject(Obj* object) {
 #ifdef DEBUG_LOG_GC
   printf("%p blacken ", (void*)object);
@@ -151,15 +171,25 @@ static void freeObject(Obj* object) {
   }
 }
 
+/**
+ * \brief Marks all of the VM's roots as reachable for garbage collection.
+ *
+ * A root is any object that the VM can reach directly without going through a
+ * reference in some other object
+ *
+ */
 static void markRoots() {
+  // Values in the stack
   for (Value* slot = vm.stack; slot < vm.stackTop; ++slot) {
     markValue(*slot);
   }
 
+  // All closures in the call stack
   for (size_t i = 0; i < vm.frameCount; ++i) {
     markObject((Obj*)vm.frames[i].closure);
   }
 
+  // Any open upvalues
   for (ObjUpvalue* upvalue = vm.openUpvalues; upvalue != NULL;
        upvalue = upvalue->next) {
     markObject((Obj*)upvalue);
@@ -170,6 +200,13 @@ static void markRoots() {
   markCompilerRoots();
 }
 
+/**
+ * \brief Process all "gray" objects in the gray stack.
+ *
+ * An object is "gray" if it has been marked as reachable but may yet have
+ * references to unmarked objects.
+ *
+ */
 static void traceReferences() {
   while (vm.grayCount > 0) {
     Obj* object = vm.grayStack[--vm.grayCount];
@@ -177,6 +214,10 @@ static void traceReferences() {
   }
 }
 
+/**
+ * \brief Frees every unmarked object in the linked list of objects.
+ *
+ */
 static void sweep() {
   Obj* previous = NULL;
   Obj* object = vm.objects;
