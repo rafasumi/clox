@@ -101,4 +101,22 @@ void tableAddAll(const Table* src, Table* dest);
 ObjString* tableFindString(Table* table, const char* chars, const size_t length,
                            const uint32_t hash);
 
+/**
+ * \brief Removes all entries in the table that are non-reachable, meaning that
+ * they will be freed by garbage collection.
+ *
+ * \param table Pointer to the hash table
+ * 
+ */
+void tableRemoveWhite(Table* table);
+
+/**
+ * \brief Marks the ObjString of all the table's keys as reachable for garbage
+ * collection.
+ *
+ * \param table Pointer to the hash table
+ *
+ */
+void markTable(Table* table);
+
 #endif

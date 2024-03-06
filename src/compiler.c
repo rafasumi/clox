@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "common.h"
 #include "global.h"
+#include "memory.h"
 #include "object.h"
 #include "scanner.h"
 
@@ -794,7 +795,7 @@ static int32_t resolveLocal(Compiler* compiler, const Token* name,
  * \return Offset of the upvalue in the function's upvalues array
  */
 static uint16_t addUpvalue(Compiler* compiler, const uint8_t index,
-                          const bool isLocal) {
+                           const bool isLocal) {
   uint16_t upvalueCount = compiler->function->upvalueCount;
 
   for (uint16_t i = 0; i < upvalueCount; ++i) {
@@ -1488,4 +1489,12 @@ ObjFunction* compile(const char* source) {
 
   ObjFunction* function = endCompiler();
   return parser.hadError ? NULL : function;
+}
+
+void markCompilerRoots() {
+  Compiler* compiler = current;
+  while (compiler != NULL) {
+    markObject((Obj*)compiler->function);
+    compiler = compiler->enclosing;
+  }
 }

@@ -87,6 +87,8 @@ typedef enum {
  */
 struct Obj {
   ObjType type;     /**< The object type */
+  bool isMarked;    /**< Boolean flag that indicates if the object currently
+                       reachable in memory */
   struct Obj* next; /**< Next object in the linked-list of allocated objects */
 };
 

@@ -41,7 +41,7 @@ typedef struct {
  */
 typedef struct {
   CallFrame frames[FRAMES_MAX]; /**< Call stack used to manage function calls */
-  uint32_t frameCount;          /**< Number of ongoing function calls */
+  size_t frameCount;            /**< Number of ongoing function calls */
   Value stack[STACK_MAX]; /**< Value stack used to manage temporary values */
   Value* stackTop;        /**< Pointer to the top of the stack */
   Table globalNames;      /**< Table of defined global identifiers */
@@ -49,8 +49,15 @@ typedef struct {
   Table strings; /**< Table of allocated strings, used for string interning */
   ObjUpvalue* openUpvalues; /**< Pointer to the head of the linked-list of open
                                upvalues */
+  size_t bytesAllocated; /**< Number of bytes of managed memory allocated by the
+                            VM */
+  size_t nextGC;         /**< Threshold to trigger a garbage collection */
   Obj* objects; /**< Pointer to the head of the linked-list of heap-allocated
                    objects */
+  size_t grayCount; /**< Number of objects in the gray stack */
+  size_t grayCapacity; /**< Capacity of the gray stack */
+  Obj** grayStack; /**< Stack of "gray" memory objects, meaning that they are
+                      reachable in memory and may reference other objects */
 } VM;
 
 /**
