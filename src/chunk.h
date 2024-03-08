@@ -42,6 +42,8 @@ typedef enum {
   OP_GET_UPVALUE,     /**< Loads a local variable through its upvalue */
   OP_SET_UPVALUE, /**< Updates the value of a local variable through its upvalue
                    */
+  OP_GET_PROPERTY,
+  OP_SET_PROPERTY,
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -74,7 +76,8 @@ typedef enum {
                   number of upvalues */
   OP_CLOSE_UPVALUE, /**< Closes all upvalues that appear after a certain point
                        in the stack */
-  OP_RETURN         /**< Returns from the current function */
+  OP_RETURN,        /**< Returns from the current function */
+  OP_CLASS,
 } OpCode;
 
 /**

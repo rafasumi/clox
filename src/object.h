@@ -7,6 +7,7 @@
 
 #include "chunk.h"
 #include "common.h"
+#include "table.h"
 #include "value.h"
 
 /**
@@ -14,6 +15,8 @@
  * \brief Returns the object type of a value
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
+
+#define IS_CLASS(value) isObjType(value, OBJ_CLASS)
 
 /**
  * \def IS_CLOSURE(value)
@@ -27,6 +30,8 @@
  */
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 
+#define IS_INSTANCE(value) isObjType(value, OBJ_INSTANCE)
+
 /**
  * \def IS_NATIVE(value)
  * \brief Helper macro used to determine if a given value is a native function
@@ -39,6 +44,8 @@
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
+#define AS_CLASS(value) ((ObjClass*)AS_OBJ(value))
+
 /**
  * \def AS_CLOSURE(value)
  * \brief Helper macro used to get an object value as a ObjClosure
@@ -50,6 +57,8 @@
  * \brief Helper macro used to get an object value as a ObjFunction
  */
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
+
+#define AS_INSTANCE(value) ((ObjInstance*)AS_OBJ(value))
 
 /**
  * \def AS_NATIVE(value)
@@ -74,8 +83,10 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
+  OBJ_CLASS,
   OBJ_CLOSURE,  /**< Closure object */
   OBJ_FUNCTION, /**< Lox function */
+  OBJ_INSTANCE,
   OBJ_NATIVE,   /**< Native function */
   OBJ_STRING,   /**< String object */
   OBJ_UPVALUE   /**< Upvalue object */
@@ -147,6 +158,17 @@ typedef struct {
   uint16_t upvalueCount; /**< Number of upvalues captured by the closure */
 } ObjClosure;
 
+typedef struct {
+  Obj obj;
+  ObjString* name;
+} ObjClass;
+
+typedef struct {
+  Obj obj;
+  ObjClass* class_;
+  Table fields;
+} ObjInstance;
+
 /**
  * \struct ObjString
  * \brief Struct used to represent a string object
@@ -157,6 +179,8 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+ObjClass* newClass(ObjString* name);
 
 /**
  * \brief Creates an empty ObjClosure object.
@@ -174,6 +198,8 @@ ObjClosure* newClosure(ObjFunction* function);
  * \return Pointer to the created ObjFunction
  */
 ObjFunction* newFunction();
+
+ObjInstance* newInstance(ObjClass* class_);
 
 /**
  * \brief Creates a new ObjNative object.

@@ -131,7 +131,7 @@ void initVM() {
   vm.grayCount = 0;
   vm.grayCapacity = 0;
   vm.grayStack = NULL;
-  
+
   initTable(&vm.globalNames);
   initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
@@ -236,6 +236,11 @@ static bool callNative(const ObjNative* native, const uint8_t argCount) {
 static bool callValue(const Value callee, const uint8_t argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
+    case OBJ_CLASS: {
+      ObjClass* class_ = AS_CLASS(callee);
+      vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(class_));
+      return true;
+    }
     case OBJ_CLOSURE:
       return call(AS_CLOSURE(callee), argCount);
     case OBJ_NATIVE:
@@ -348,7 +353,7 @@ static void concatenate() {
  * \param offset The offset of the variable in the globalValues array
  * \param frame Pointer to the call frame of the current function
  * \param ip Instruction pointer
- * 
+ *
  * \return Boolean value that indicates if there were any errors when fetching
  * the variable
  *
@@ -383,7 +388,7 @@ static void defineGlobal(const uint32_t offset) {
  * \param offset The offset of the variable in the globalValues array
  * \param frame Pointer to the call frame of the current function
  * \param ip Instruction pointer
- * 
+ *
  * \return Boolean value that indicates if there were any errors
  */
 static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
@@ -409,7 +414,7 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
  * closure
  * \param frame Pointer to the call frame of the current function
  * \param ip Instruction pointer
- * 
+ *
  * \return Next position of the instruction pointer
  */
 static uint8_t* defineClosure(ObjFunction* function, const CallFrame* frame,
@@ -574,6 +579,39 @@ static InterpretResult run() {
       *frame->closure->upvalues[slot]->location = peek(0);
       break;
     }
+    case OP_GET_PROPERTY: {
+      if (!IS_INSTANCE(peek(0))) {
+        runtimeError("Only instances have properties");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      ObjInstance* instance = AS_INSTANCE(peek(0));
+      ObjString* name = vm.globalValues.vars[READ_BYTE()].identifier;
+
+      Value value;
+      if (tableGet(&instance->fields, name, &value)) {
+        pop(); // Instance
+        push(value);
+        break;
+      }
+
+      runtimeError("Undefined property '%s'.", name->chars);
+      return INTERPRET_RUNTIME_ERROR;
+    }
+    case OP_SET_PROPERTY: {
+      if (!IS_INSTANCE(peek(1))) {
+        runtimeError("Only instances have fields.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      ObjInstance* instance = AS_INSTANCE(peek(1));
+      ObjString* name = vm.globalValues.vars[READ_BYTE()].identifier;
+      tableSet(&instance->fields, name, peek(0));
+      Value value = pop();
+      pop(); // Instance
+      push(value);
+      break;
+    }
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
       break;
@@ -698,6 +736,9 @@ static InterpretResult run() {
 
       break;
     }
+    case OP_CLASS:
+      push(OBJ_VAL(newClass(vm.globalValues.vars[READ_BYTE()].identifier)));
+      break;
     default:
       break;
     }

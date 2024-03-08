@@ -182,5 +182,6 @@ void markTable(Table* table) {
   for (size_t i = 0; i < table->capacity; ++i) {
     Entry* entry = &table->entries[i];
     markObject((Obj*)entry->key);
+    markValue(entry->value);
   }
 }
