@@ -43,7 +43,9 @@ typedef enum {
   OP_SET_UPVALUE, /**< Updates the value of a local variable through its upvalue
                    */
   OP_GET_PROPERTY,
+  OP_GET_PROPERTY_LONG,
   OP_SET_PROPERTY,
+  OP_SET_PROPERTY_LONG,
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -78,6 +80,7 @@ typedef enum {
                        in the stack */
   OP_RETURN,        /**< Returns from the current function */
   OP_CLASS,
+  OP_CLASS_LONG,
 } OpCode;
 
 /**

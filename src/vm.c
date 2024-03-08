@@ -404,6 +404,42 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   return true;
 }
 
+static bool getProperty(const uint32_t nameOffset) {
+  if (!IS_INSTANCE(peek(0))) {
+    runtimeError("Only instances have properties");
+    return false;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(peek(0));
+  ObjString* name = vm.globalValues.vars[nameOffset].identifier;
+
+  Value value;
+  if (tableGet(&instance->fields, name, &value)) {
+    pop(); // Instance
+    push(value);
+    return true;
+  }
+
+  runtimeError("Undefined property '%s'.", name->chars);
+  return false;
+}
+
+static bool setProperty(const uint32_t nameOffset) {
+  if (!IS_INSTANCE(peek(1))) {
+    runtimeError("Only instances have fields.");
+    return false;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(peek(1));
+  ObjString* name = vm.globalValues.vars[nameOffset].identifier;
+  tableSet(&instance->fields, name, peek(0));
+  Value value = pop();
+  pop(); // Instance
+  push(value);
+
+  return true;
+}
+
 /**
  * \brief Auxiliary function that defines a new closure.
  *
@@ -579,39 +615,22 @@ static InterpretResult run() {
       *frame->closure->upvalues[slot]->location = peek(0);
       break;
     }
-    case OP_GET_PROPERTY: {
-      if (!IS_INSTANCE(peek(0))) {
-        runtimeError("Only instances have properties");
+    case OP_GET_PROPERTY:
+      if (!getProperty(READ_BYTE()))
         return INTERPRET_RUNTIME_ERROR;
-      }
-
-      ObjInstance* instance = AS_INSTANCE(peek(0));
-      ObjString* name = vm.globalValues.vars[READ_BYTE()].identifier;
-
-      Value value;
-      if (tableGet(&instance->fields, name, &value)) {
-        pop(); // Instance
-        push(value);
-        break;
-      }
-
-      runtimeError("Undefined property '%s'.", name->chars);
-      return INTERPRET_RUNTIME_ERROR;
-    }
-    case OP_SET_PROPERTY: {
-      if (!IS_INSTANCE(peek(1))) {
-        runtimeError("Only instances have fields.");
-        return INTERPRET_RUNTIME_ERROR;
-      }
-
-      ObjInstance* instance = AS_INSTANCE(peek(1));
-      ObjString* name = vm.globalValues.vars[READ_BYTE()].identifier;
-      tableSet(&instance->fields, name, peek(0));
-      Value value = pop();
-      pop(); // Instance
-      push(value);
       break;
-    }
+    case OP_GET_PROPERTY_LONG:
+      if (!getProperty(READ_LONG_OPERAND()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_SET_PROPERTY:
+      if (!setProperty(READ_BYTE()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
+    case OP_SET_PROPERTY_LONG:
+      if (!setProperty(READ_LONG_OPERAND()))
+        return INTERPRET_RUNTIME_ERROR;
+      break;
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
       break;
@@ -738,6 +757,10 @@ static InterpretResult run() {
     }
     case OP_CLASS:
       push(OBJ_VAL(newClass(vm.globalValues.vars[READ_BYTE()].identifier)));
+      break;
+    case OP_CLASS_LONG:
+      push(OBJ_VAL(
+          newClass(vm.globalValues.vars[READ_LONG_OPERAND()].identifier)));
       break;
     default:
       break;

@@ -1001,13 +1001,13 @@ static void variable(const bool canAssign) {
 static void dot(const bool canAssign) {
   consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
   ConstFlag flag = (ConstFlag)false;
-  uint32_t name = identifierConstant(&parser.previous, &flag);
+  uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
 
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
-    emitBytes(OP_SET_PROPERTY, name);
+    emitVariableInstruction(OP_SET_PROPERTY, nameOffset, true);
   } else {
-    emitBytes(OP_GET_PROPERTY, name);
+    emitVariableInstruction(OP_GET_PROPERTY, nameOffset, true);
   }
 }
 
@@ -1242,11 +1242,11 @@ static void function(const FunctionType type) {
 static void classDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect class name.");
   ConstFlag flag = (ConstFlag)true;
-  uint32_t nameConstant = identifierConstant(&parser.previous, &flag);
+  uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
   declareVariable(true);
 
-  emitBytes(OP_CLASS, nameConstant);
-  defineVariable(nameConstant);
+  emitVariableInstruction(OP_CLASS, nameOffset, true);
+  defineVariable(nameOffset);
 
   consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");

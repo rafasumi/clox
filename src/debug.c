@@ -251,8 +251,12 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return byteInstruction("OP_SET_UPVALUE", chunk, offset);
   case OP_GET_PROPERTY:
     return globalInstruction("OP_GET_PROPERTY", chunk, offset);
+  case OP_GET_PROPERTY_LONG:
+    return globalLongInstruction("OP_GET_PROPERTY_LONG", chunk, offset);
   case OP_SET_PROPERTY:
     return globalInstruction("OP_SET_PROPERTY", chunk, offset);
+  case OP_SET_PROPERTY_LONG:
+    return globalLongInstruction("OP_SET_PROPERTY_LONG", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
@@ -307,6 +311,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return simpleInstruction("OP_RETURN", offset);
   case OP_CLASS:
     return globalInstruction("OP_CLASS", chunk, offset);
+  case OP_CLASS_LONG:
+    return globalLongInstruction("OP_CLASS", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;
