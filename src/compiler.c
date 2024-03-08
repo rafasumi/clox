@@ -722,7 +722,6 @@ static uint32_t identifierConstant(const Token* name, ConstFlag* isConst) {
   // This line is needed in the case of an assignment to an undeclared global
   *isConst = ((*isConst == CONST_UNKNOWN) ? false : *isConst);
 
-  // Watch out for double free of identifier
   writeGlobalVarArray(&vm.globalValues,
                       UNDEFINED_GLOBAL(identifier, (bool)(*isConst)));
 
@@ -999,6 +998,19 @@ static void variable(const bool canAssign) {
   namedVariable(parser.previous, canAssign);
 }
 
+static void dot(const bool canAssign) {
+  consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+  ConstFlag flag = (ConstFlag)false;
+  uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
+
+  if (canAssign && match(TOKEN_EQUAL)) {
+    expression();
+    emitVariableInstruction(OP_SET_PROPERTY, nameOffset, true);
+  } else {
+    emitVariableInstruction(OP_GET_PROPERTY, nameOffset, true);
+  }
+}
+
 /**
  * \brief Function to parse an unary expression
  *
@@ -1030,7 +1042,7 @@ ParseRule rules[] = {
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
-    [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
+    [TOKEN_DOT] = {NULL, dot, PREC_CALL},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
     [TOKEN_QUESTION] = {NULL, conditional, PREC_CONDITIONAL},
@@ -1225,6 +1237,19 @@ static void function(const FunctionType type) {
     emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
     emitByte(compiler.upvalues[i].index);
   }
+}
+
+static void classDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect class name.");
+  ConstFlag flag = (ConstFlag)true;
+  uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
+  declareVariable(true);
+
+  emitVariableInstruction(OP_CLASS, nameOffset, true);
+  defineVariable(nameOffset);
+
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
 }
 
 /**
@@ -1436,7 +1461,9 @@ static void synchronize() {
  *
  */
 static void declaration() {
-  if (match(TOKEN_FUN)) {
+  if (match(TOKEN_CLASS)) {
+    classDeclaration();
+  } else if (match(TOKEN_FUN)) {
     funDeclaration();
   } else if (match(TOKEN_VAR) || match(TOKEN_CONST)) {
     varDeclaration(parser.previous.type == TOKEN_CONST);
