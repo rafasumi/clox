@@ -59,6 +59,23 @@ static bool sqrtNative(const uint8_t argCount, Value* args) {
   return true;
 }
 
+static bool hasPropertyNative(const uint8_t argCount, Value* args) {
+  if (!IS_INSTANCE(args[0])) {
+    args[-1] = OBJ_VAL(copyString("First argument must be an instance.", 35));
+    return false;
+  }
+
+  if (!IS_STRING(args[1])) {
+    args[-1] = OBJ_VAL(copyString("Second argument must be a string.", 33));
+    return false;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  Value value;
+  args[-1] = BOOL_VAL(tableGet(&instance->fields, AS_STRING(args[1]), &value));
+  return true;
+}
+
 /**
  * \brief Resets the value stack by moving the stack pointer to its start.
  */
@@ -138,6 +155,7 @@ void initVM() {
 
   defineNative("clock", clockNative, 0);
   defineNative("sqrt", sqrtNative, 1);
+  defineNative("hasProperty", hasPropertyNative, 2);
 }
 
 void freeVM() {
