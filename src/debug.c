@@ -132,6 +132,16 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+static size_t invokeInstruction(const char* name, const Chunk* chunk,
+                                const size_t offset) {
+  uint8_t nameOffset = chunk->code[offset + 1];
+  uint8_t argCount = chunk->code[offset + 2];
+  printf("%-21s (%d args) %4d '%s'\n", name, argCount, nameOffset,
+         vm.globalValues.vars[nameOffset].identifier->chars);
+  
+  return offset + 3;
+}
+
 /**
  * \brief Display an instruction which handles global variables. This
  * instruction has one 8-bit operand.
@@ -293,6 +303,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
   case OP_CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  case OP_INVOKE:
+    return invokeInstruction("OP_INVOKE", chunk, offset);
   case OP_CLOSURE: {
     uint8_t closureOffset = chunk->code[offset + 1];
     return closureInstruction("OP_CLOSURE", chunk, (uint32_t)closureOffset,
@@ -313,6 +325,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_CLASS", chunk, offset);
   case OP_CLASS_LONG:
     return globalLongInstruction("OP_CLASS", chunk, offset);
+  case OP_METHOD:
+    return globalInstruction("OP_METHOD", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;

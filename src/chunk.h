@@ -71,6 +71,7 @@ typedef enum {
                        of the stack is false */
   OP_LOOP, /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_CALL, /**< Invokes a function that is currently in the stack */
+  OP_INVOKE,
   OP_CLOSURE, /**< Defines a closure. It has a variable sized operand, which
                  depends on the number of upvalues */
   OP_CLOSURE_LONG,  /**< Defines a closure, while loading it with a 24-bit
@@ -81,6 +82,7 @@ typedef enum {
   OP_RETURN,        /**< Returns from the current function */
   OP_CLASS,
   OP_CLASS_LONG,
+  OP_METHOD,
 } OpCode;
 
 /**

@@ -153,6 +153,9 @@ void initVM() {
   initGlobalVarArray(&vm.globalValues);
   initTable(&vm.strings);
 
+  vm.initString = NULL;
+  vm.initString = copyString("init", 4);
+
   defineNative("clock", clockNative, 0);
   defineNative("sqrt", sqrtNative, 1);
   defineNative("hasProperty", hasPropertyNative, 2);
@@ -162,6 +165,7 @@ void freeVM() {
   freeTable(&vm.globalNames);
   freeGlobalVarArray(&vm.globalValues);
   freeTable(&vm.strings);
+  vm.initString = NULL;
   freeObjects();
 }
 
@@ -254,9 +258,23 @@ static bool callNative(const ObjNative* native, const uint8_t argCount) {
 static bool callValue(const Value callee, const uint8_t argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
+    case OBJ_BOUND_METHOD: {
+      ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+      // Stores the receiver at the first slot of call frame, to be used as
+      // "this"
+      vm.stackTop[-argCount - 1] = bound->receiver;
+      return call(bound->method, argCount);
+    }
     case OBJ_CLASS: {
       ObjClass* class_ = AS_CLASS(callee);
       vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(class_));
+      Value initializer;
+      if (tableGet(&class_->methods, vm.initString, &initializer)) {
+        return call(AS_CLOSURE(initializer), argCount);
+      } else if (argCount != 0) {
+        runtimeError("Expected 0 arguments but got %d.", argCount);
+        return false;
+      }
       return true;
     }
     case OBJ_CLOSURE:
@@ -270,6 +288,49 @@ static bool callValue(const Value callee, const uint8_t argCount) {
 
   runtimeError("Can only call functions and classes");
   return false;
+}
+
+static bool invokeFromClass(ObjClass* class_, ObjString* name, const uint8_t argCount) {
+  Value method;
+  if (!tableGet(&class_->methods, name, &method)) {
+    runtimeError("Undefined property '%s'.", name->chars);
+    return false;
+  }
+
+  return call(AS_CLOSURE(method), argCount);
+}
+
+static bool invoke(ObjString* name, const uint8_t argCount) {
+  Value receiver = peek(argCount);
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError("Only instances have methods.");
+    return false;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(receiver);
+
+  Value value;
+  if (tableGet(&instance->fields, name, &value)) {
+    vm.stackTop[-argCount - 1] = value;
+    return callValue(value, argCount);
+  }
+
+  return invokeFromClass(instance->class_, name, argCount);
+}
+
+static bool bindMethod(const ObjClass* class_, const ObjString* name) {
+  Value method;
+  if (!tableGet(&class_->methods, name, &method)) {
+    runtimeError("Undefined property '%s'.", name->chars);
+    return false;
+  }
+
+  ObjBoundMethod* bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+
+  pop(); // Pops the instance
+  push(OBJ_VAL(bound));
+
+  return true;
 }
 
 /**
@@ -327,6 +388,13 @@ static void closeUpvalues(const Value* last) {
     upvalue->location = &upvalue->closed;
     vm.openUpvalues = upvalue->next;
   }
+}
+
+static void defineMethod(ObjString* name) {
+  Value method = peek(0);
+  ObjClass* class_ = AS_CLASS(peek(1));
+  tableSet(&class_->methods, name, method);
+  pop();
 }
 
 /**
@@ -438,8 +506,11 @@ static bool getProperty(const uint32_t nameOffset) {
     return true;
   }
 
-  runtimeError("Undefined property '%s'.", name->chars);
-  return false;
+  if (!bindMethod(instance->class_, name)) {
+    return false;
+  }
+
+  return true;
 }
 
 static bool setProperty(const uint32_t nameOffset) {
@@ -743,7 +814,17 @@ static InterpretResult run() {
       frame = &vm.frames[vm.frameCount - 1];
       ip = frame->ip;
       break;
-      ;
+    }
+    case OP_INVOKE: {
+      ObjString* method = vm.globalValues.vars[READ_BYTE()].identifier;
+      uint8_t argCount = READ_BYTE();
+
+      frame->ip = ip;
+      if (!invoke(method, argCount))
+        return INTERPRET_RUNTIME_ERROR;
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+      break;
     }
     case OP_CLOSURE:
       ip = defineClosure(AS_FUNCTION(READ_CONSTANT()), frame, ip);
@@ -779,6 +860,9 @@ static InterpretResult run() {
     case OP_CLASS_LONG:
       push(OBJ_VAL(
           newClass(vm.globalValues.vars[READ_LONG_OPERAND()].identifier)));
+      break;
+    case OP_METHOD:
+      defineMethod(vm.globalValues.vars[READ_BYTE()].identifier);
       break;
     default:
       break;
