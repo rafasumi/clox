@@ -1032,13 +1032,13 @@ static void dot(const bool canAssign) {
 
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
-    emitVariableInstruction(OP_SET_PROPERTY, nameOffset, true);
+    emitOffsetOperandInstruction(OP_SET_PROPERTY, nameOffset);
   } else if (match(TOKEN_LEFT_PAREN)) {
     uint8_t argCount = argumentList();
-    emitBytes(OP_INVOKE, nameOffset);
+    emitOffsetOperandInstruction(OP_INVOKE, nameOffset);
     emitByte(argCount);
   } else {
-    emitVariableInstruction(OP_GET_PROPERTY, nameOffset, true);
+    emitOffsetOperandInstruction(OP_GET_PROPERTY, nameOffset);
   }
 }
 
@@ -1282,7 +1282,7 @@ static void method() {
 
   function(type);
 
-  emitBytes(OP_METHOD, nameOffset);
+  emitOffsetOperandInstruction(OP_METHOD, nameOffset);
 }
 
 static void classDeclaration() {
@@ -1292,7 +1292,7 @@ static void classDeclaration() {
   uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
   declareVariable(true);
 
-  emitVariableInstruction(OP_CLASS, nameOffset, true);
+  emitOffsetOperandInstruction(OP_CLASS, nameOffset);
   defineVariable(nameOffset);
 
   ClassCompiler classCompiler;

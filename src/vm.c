@@ -826,6 +826,17 @@ static InterpretResult run() {
       ip = frame->ip;
       break;
     }
+    case OP_INVOKE_LONG: {
+      ObjString* method = vm.globalValues.vars[READ_LONG_OPERAND()].identifier;
+      uint8_t argCount = READ_BYTE();
+
+      frame->ip = ip;
+      if (!invoke(method, argCount))
+        return INTERPRET_RUNTIME_ERROR;
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+      break;
+    }
     case OP_CLOSURE:
       ip = defineClosure(AS_FUNCTION(READ_CONSTANT()), frame, ip);
       break;
@@ -863,6 +874,9 @@ static InterpretResult run() {
       break;
     case OP_METHOD:
       defineMethod(vm.globalValues.vars[READ_BYTE()].identifier);
+      break;
+    case OP_METHOD_LONG:
+      defineMethod(vm.globalValues.vars[READ_LONG_OPERAND()].identifier);
       break;
     default:
       break;
