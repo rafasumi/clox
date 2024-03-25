@@ -165,6 +165,7 @@ typedef struct {
   Obj obj;
   ObjString* name;
   Table methods;
+  Value initializer;
 } ObjClass;
 
 typedef struct {

@@ -53,6 +53,7 @@ ObjBoundMethod* newBoundMethod(const Value receiver, ObjClosure* method) {
 ObjClass* newClass(ObjString* name) {
   ObjClass* class_ = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
   class_->name = name;
+  class_->initializer = UNDEFINED_VAL;
   initTable(&class_->methods);
 
   return class_;

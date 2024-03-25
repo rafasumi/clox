@@ -268,9 +268,8 @@ static bool callValue(const Value callee, const uint8_t argCount) {
     case OBJ_CLASS: {
       ObjClass* class_ = AS_CLASS(callee);
       vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(class_));
-      Value initializer;
-      if (tableGet(&class_->methods, vm.initString, &initializer)) {
-        return call(AS_CLOSURE(initializer), argCount);
+      if (!IS_UNDEFINED(class_->initializer)) {
+        return call(AS_CLOSURE(class_->initializer), argCount);
       } else if (argCount != 0) {
         runtimeError("Expected 0 arguments but got %d.", argCount);
         return false;
@@ -394,6 +393,8 @@ static void defineMethod(ObjString* name) {
   Value method = peek(0);
   ObjClass* class_ = AS_CLASS(peek(1));
   tableSet(&class_->methods, name, method);
+  if (name == vm.initString)
+    class_->initializer = method;
   pop();
 }
 
