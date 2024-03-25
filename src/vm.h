@@ -47,6 +47,7 @@ typedef struct {
   Table globalNames;      /**< Table of defined global identifiers */
   GlobalVarArray globalValues; /**< Array with values of global variables */
   Table strings; /**< Table of allocated strings, used for string interning */
+  ObjString* initString;
   ObjUpvalue* openUpvalues; /**< Pointer to the head of the linked-list of open
                                upvalues */
   size_t bytesAllocated; /**< Number of bytes of managed memory allocated by the

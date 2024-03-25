@@ -132,6 +132,27 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+static size_t invokeInstruction(const char* name, const Chunk* chunk,
+                                const size_t offset) {
+  uint8_t nameOffset = chunk->code[offset + 1];
+  uint8_t argCount = chunk->code[offset + 2];
+  printf("%-21s (%d args) %4d '%s'\n", name, argCount, nameOffset,
+         vm.globalValues.vars[nameOffset].identifier->chars);
+
+  return offset + 3;
+}
+
+static size_t invokeLongInstruction(const char* name, const Chunk* chunk,
+                                    const size_t offset) {
+  uint8_t nameOffset = (chunk->code[offset + 3] << 16) |
+                       (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
+  uint8_t argCount = chunk->code[offset + 4];
+  printf("%-21s (%d args) %4d '%s'\n", name, argCount, nameOffset,
+         vm.globalValues.vars[nameOffset].identifier->chars);
+
+  return offset + 5;
+}
+
 /**
  * \brief Display an instruction which handles global variables. This
  * instruction has one 8-bit operand.
@@ -293,6 +314,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return jumpInstruction("OP_LOOP", -1, chunk, offset);
   case OP_CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  case OP_INVOKE:
+    return invokeInstruction("OP_INVOKE", chunk, offset);
+  case OP_INVOKE_LONG:
+    return invokeLongInstruction("OP_INVOKE_LONG", chunk, offset);
   case OP_CLOSURE: {
     uint8_t closureOffset = chunk->code[offset + 1];
     return closureInstruction("OP_CLOSURE", chunk, (uint32_t)closureOffset,
@@ -313,6 +338,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_CLASS", chunk, offset);
   case OP_CLASS_LONG:
     return globalLongInstruction("OP_CLASS", chunk, offset);
+  case OP_METHOD:
+    return globalInstruction("OP_METHOD", chunk, offset);
+  case OP_METHOD_LONG:
+    return globalLongInstruction("OP_METHOD_LONG", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;

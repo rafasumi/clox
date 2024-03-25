@@ -16,6 +16,7 @@
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
+#define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
 #define IS_CLASS(value) isObjType(value, OBJ_CLASS)
 
 /**
@@ -44,6 +45,7 @@
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
+#define AS_BOUND_METHOD(value) ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value) ((ObjClass*)AS_OBJ(value))
 
 /**
@@ -83,6 +85,7 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
+  OBJ_BOUND_METHOD,
   OBJ_CLASS,
   OBJ_CLOSURE,  /**< Closure object */
   OBJ_FUNCTION, /**< Lox function */
@@ -161,6 +164,8 @@ typedef struct {
 typedef struct {
   Obj obj;
   ObjString* name;
+  Table methods;
+  Value initializer;
 } ObjClass;
 
 typedef struct {
@@ -168,6 +173,12 @@ typedef struct {
   ObjClass* class_;
   Table fields;
 } ObjInstance;
+
+typedef struct {
+  Obj obj;
+  Value receiver;
+  ObjClosure* method;
+} ObjBoundMethod;
 
 /**
  * \struct ObjString
@@ -179,6 +190,8 @@ struct ObjString {
   char* chars;   /**< Pointer to the string in the heap */
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
+
+ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 
 ObjClass* newClass(ObjString* name);
 
