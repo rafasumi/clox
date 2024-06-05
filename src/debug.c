@@ -144,7 +144,7 @@ static size_t invokeInstruction(const char* name, const Chunk* chunk,
 
 static size_t invokeLongInstruction(const char* name, const Chunk* chunk,
                                     const size_t offset) {
-  uint8_t nameOffset = (chunk->code[offset + 3] << 16) |
+  uint32_t nameOffset = (chunk->code[offset + 3] << 16) |
                        (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
   uint8_t argCount = chunk->code[offset + 4];
   printf("%-21s (%d args) %4d '%s'\n", name, argCount, nameOffset,
@@ -278,6 +278,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_SET_PROPERTY", chunk, offset);
   case OP_SET_PROPERTY_LONG:
     return globalLongInstruction("OP_SET_PROPERTY_LONG", chunk, offset);
+  case OP_GET_SUPER:
+    return globalInstruction("OP_GET_SUPER", chunk, offset);
+  case OP_GET_SUPER_LONG:
+    return globalLongInstruction("OP_GET_SUPER_LONG", chunk, offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
   case OP_NEGATE:
@@ -318,6 +322,10 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return invokeInstruction("OP_INVOKE", chunk, offset);
   case OP_INVOKE_LONG:
     return invokeLongInstruction("OP_INVOKE_LONG", chunk, offset);
+  case OP_SUPER_INVOKE:
+    return invokeInstruction("OP_SUPER_INVOKE", chunk, offset);
+  case OP_SUPER_INVOKE_LONG:
+    return invokeLongInstruction("OP_SUPER_INVOKE_LONG", chunk, offset);
   case OP_CLOSURE: {
     uint8_t closureOffset = chunk->code[offset + 1];
     return closureInstruction("OP_CLOSURE", chunk, (uint32_t)closureOffset,
@@ -338,6 +346,8 @@ size_t disassembleInstruction(const Chunk* chunk, const size_t offset) {
     return globalInstruction("OP_CLASS", chunk, offset);
   case OP_CLASS_LONG:
     return globalLongInstruction("OP_CLASS", chunk, offset);
+  case OP_INHERIT:
+    return simpleInstruction("OP_INHERIT", offset);
   case OP_METHOD:
     return globalInstruction("OP_METHOD", chunk, offset);
   case OP_METHOD_LONG:

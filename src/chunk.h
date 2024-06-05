@@ -46,6 +46,8 @@ typedef enum {
   OP_GET_PROPERTY_LONG,
   OP_SET_PROPERTY,
   OP_SET_PROPERTY_LONG,
+  OP_GET_SUPER,
+  OP_GET_SUPER_LONG,
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -73,6 +75,8 @@ typedef enum {
   OP_CALL, /**< Invokes a function that is currently in the stack */
   OP_INVOKE,
   OP_INVOKE_LONG,
+  OP_SUPER_INVOKE,
+  OP_SUPER_INVOKE_LONG,
   OP_CLOSURE, /**< Defines a closure. It has a variable sized operand, which
                  depends on the number of upvalues */
   OP_CLOSURE_LONG,  /**< Defines a closure, while loading it with a 24-bit
@@ -83,6 +87,7 @@ typedef enum {
   OP_RETURN,        /**< Returns from the current function */
   OP_CLASS,
   OP_CLASS_LONG,
+  OP_INHERIT,
   OP_METHOD,
   OP_METHOD_LONG,
 } OpCode;

@@ -268,8 +268,15 @@ static bool callValue(const Value callee, const uint8_t argCount) {
     case OBJ_CLASS: {
       ObjClass* class_ = AS_CLASS(callee);
       vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(class_));
+
+      Value superclassInit;
       if (!IS_UNDEFINED(class_->initializer)) {
+        // Uses the cached initializer
         return call(AS_CLOSURE(class_->initializer), argCount);
+      } else if (tableGet(&class_->methods, vm.initString, &superclassInit)) {
+        // Tries to use a superclass initializer if the init method is not
+        // defined
+        return call(AS_CLOSURE(superclassInit), argCount);
       } else if (argCount != 0) {
         runtimeError("Expected 0 arguments but got %d.", argCount);
         return false;
@@ -289,7 +296,8 @@ static bool callValue(const Value callee, const uint8_t argCount) {
   return false;
 }
 
-static bool invokeFromClass(ObjClass* class_, ObjString* name, const uint8_t argCount) {
+static bool invokeFromClass(ObjClass* class_, ObjString* name,
+                            const uint8_t argCount) {
   Value method;
   if (!tableGet(&class_->methods, name, &method)) {
     runtimeError("Undefined property '%s'.", name->chars);
@@ -530,6 +538,16 @@ static bool setProperty(const uint32_t nameOffset) {
   return true;
 }
 
+static bool getSuper(const ObjString* name) {
+  ObjClass* superclass = AS_CLASS(pop());
+
+  if (!bindMethod(superclass, name)) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * \brief Auxiliary function that defines a new closure.
  *
@@ -590,11 +608,9 @@ static InterpretResult run() {
 #define READ_CONSTANT_LONG()                                                   \
   (frame->closure->function->chunk.constants.values[READ_LONG_OPERAND()])
 
-// Read a string from the constants array with an 8-bit offset
-#define READ_STRING() AS_STRING(READ_CONSTANT())
+#define READ_GLOBAL_NAME() vm.globalValues.vars[READ_BYTE()].identifier
 
-// Read a string from the constants array with a 24-bit offset
-#define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
+#define READ_GLOBAL_NAME_LONG() vm.globalValues.vars[READ_LONG_OPERAND()].identifier
 
 // Apply a binary operation based on the two next values at stack and on the
 // type of the operands
@@ -721,6 +737,20 @@ static InterpretResult run() {
       if (!setProperty(READ_LONG_OPERAND()))
         return INTERPRET_RUNTIME_ERROR;
       break;
+    case OP_GET_SUPER: {
+      ObjString* name = READ_GLOBAL_NAME();
+      if (!getSuper(name)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      break;
+    }
+    case OP_GET_SUPER_LONG: {
+      ObjString* name = READ_GLOBAL_NAME_LONG();
+      if (!getSuper(name)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      break;
+    }
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
       break;
@@ -817,7 +847,7 @@ static InterpretResult run() {
       break;
     }
     case OP_INVOKE: {
-      ObjString* method = vm.globalValues.vars[READ_BYTE()].identifier;
+      ObjString* method = READ_GLOBAL_NAME();
       uint8_t argCount = READ_BYTE();
 
       frame->ip = ip;
@@ -828,7 +858,7 @@ static InterpretResult run() {
       break;
     }
     case OP_INVOKE_LONG: {
-      ObjString* method = vm.globalValues.vars[READ_LONG_OPERAND()].identifier;
+      ObjString* method = READ_GLOBAL_NAME_LONG();
       uint8_t argCount = READ_BYTE();
 
       frame->ip = ip;
@@ -836,6 +866,34 @@ static InterpretResult run() {
         return INTERPRET_RUNTIME_ERROR;
       frame = &vm.frames[vm.frameCount - 1];
       ip = frame->ip;
+      break;
+    }
+    case OP_SUPER_INVOKE: {
+      ObjString* method = READ_GLOBAL_NAME();
+      uint8_t argCount = READ_BYTE();
+      ObjClass* superclass = AS_CLASS(pop());
+
+      frame->ip = ip;
+      if (!invokeFromClass(superclass, method, argCount)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+
+      break;
+    }
+    case OP_SUPER_INVOKE_LONG: {
+      ObjString* method = READ_GLOBAL_NAME_LONG();
+      uint8_t argCount = READ_BYTE();
+      ObjClass* superclass = AS_CLASS(pop());
+
+      frame->ip = ip;
+      if (!invokeFromClass(superclass, method, argCount)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+
       break;
     }
     case OP_CLOSURE:
@@ -867,17 +925,29 @@ static InterpretResult run() {
       break;
     }
     case OP_CLASS:
-      push(OBJ_VAL(newClass(vm.globalValues.vars[READ_BYTE()].identifier)));
+      push(OBJ_VAL(newClass(READ_GLOBAL_NAME())));
       break;
     case OP_CLASS_LONG:
       push(OBJ_VAL(
-          newClass(vm.globalValues.vars[READ_LONG_OPERAND()].identifier)));
+          newClass(READ_GLOBAL_NAME_LONG())));
       break;
+    case OP_INHERIT: {
+      Value superclass = peek(1);
+      if (!IS_CLASS(superclass)) {
+        runtimeError("Superclass must be a class.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      ObjClass* subclass = AS_CLASS(peek(0));
+      tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
+      pop();
+      break;
+    }
     case OP_METHOD:
-      defineMethod(vm.globalValues.vars[READ_BYTE()].identifier);
+      defineMethod(READ_GLOBAL_NAME());
       break;
     case OP_METHOD_LONG:
-      defineMethod(vm.globalValues.vars[READ_LONG_OPERAND()].identifier);
+      defineMethod(READ_GLOBAL_NAME_LONG());
       break;
     default:
       break;
@@ -889,8 +959,8 @@ static InterpretResult run() {
 #undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
-#undef READ_STRING
-#undef READ_STRING_LONG
+#undef READ_GLOBAL_NAME
+#undef READ_GLOBAL_NAME_LONG
 #undef BINARY_OP
 }
 
