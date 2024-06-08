@@ -88,7 +88,7 @@ static size_t jumpInstruction(const char* name, const int8_t sign,
 }
 
 /**
- * \brief Display an OP_CONSTANT instruction at a given offset. This instruction
+ * \brief Display an instruction which use the constants array. This instruction
  * has one 8-bit operand.
  *
  * \param name Name of the instruction
@@ -109,8 +109,8 @@ static size_t constantInstruction(const char* name, const Chunk* chunk,
 }
 
 /**
- * \brief Display an OP_CONSTANT_LONG instruction at a given offset. This
- * instruction has three 8-bit operands.
+ * \brief Display an instruction which use the constants array. This instruction
+ * has three 8-bit operands.
  *
  * \param name Name of the instruction
  * \param chunk Pointer to the chunk of bytecode that contains the instruction
@@ -132,6 +132,16 @@ static size_t constantLongInstruction(const char* name, const Chunk* chunk,
   return offset + 4;
 }
 
+/**
+ * \brief Display a OP_INVOKE or OP_SUPER_INVOKE instruction at a given offset.
+ * This instruction has one 8-bit operand.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t invokeInstruction(const char* name, const Chunk* chunk,
                                 const size_t offset) {
   uint8_t nameOffset = chunk->code[offset + 1];
@@ -142,10 +152,21 @@ static size_t invokeInstruction(const char* name, const Chunk* chunk,
   return offset + 3;
 }
 
+/**
+ * \brief Display a OP_INVOKE_LONG or OP_SUPER_INVOKE_LONG instruction at a
+ * given offset. This instruction has three 8-bit operands.
+ *
+ * \param name Name of the instruction
+ * \param chunk Pointer to the chunk of bytecode that contains the instruction
+ * \param offset Offset of the instruction within the bytecode array
+ *
+ * \return Offset of the next instruction
+ */
 static size_t invokeLongInstruction(const char* name, const Chunk* chunk,
                                     const size_t offset) {
   uint32_t nameOffset = (chunk->code[offset + 3] << 16) |
-                       (chunk->code[offset + 2] << 8) | chunk->code[offset + 1];
+                        (chunk->code[offset + 2] << 8) |
+                        chunk->code[offset + 1];
   uint8_t argCount = chunk->code[offset + 4];
   printf("%-21s (%d args) %4d '%s'\n", name, argCount, nameOffset,
          vm.globalValues.vars[nameOffset].identifier->chars);

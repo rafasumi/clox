@@ -16,7 +16,16 @@
  */
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
 
+/**
+ * \def IS_BOUND_METHOD(value)
+ * \brief Helper macro used to determine if a given value is a bound method
+ */
 #define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)
+
+/**
+ * \def IS_CLASS(value)
+ * \brief Helper macro used to determine if a given value is a class object
+ */
 #define IS_CLASS(value) isObjType(value, OBJ_CLASS)
 
 /**
@@ -31,6 +40,10 @@
  */
 #define IS_FUNCTION(value) isObjType(value, OBJ_FUNCTION)
 
+/**
+ * \def IS_INSTANCE(value)
+ * \brief Helper macro used to determine if a given value is a class instance
+ */
 #define IS_INSTANCE(value) isObjType(value, OBJ_INSTANCE)
 
 /**
@@ -45,7 +58,16 @@
  */
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
+/**
+ * \def AS_BOUND_METHOD(value)
+ * \brief Helper macro used to get an object value as a ObjBoundMethod
+ */
 #define AS_BOUND_METHOD(value) ((ObjBoundMethod*)AS_OBJ(value))
+
+/**
+ * \def AS_CLASS(value)
+ * \brief Helper macro used to get an object value as a ObjClass
+ */
 #define AS_CLASS(value) ((ObjClass*)AS_OBJ(value))
 
 /**
@@ -60,6 +82,10 @@
  */
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 
+/**
+ * \def AS_INSTANCE(value)
+ * \brief Helper macro used to get an object value as a ObjInstance
+ */
 #define AS_INSTANCE(value) ((ObjInstance*)AS_OBJ(value))
 
 /**
@@ -85,14 +111,14 @@
  * \brief Enum for all types of object values
  */
 typedef enum {
-  OBJ_BOUND_METHOD,
-  OBJ_CLASS,
-  OBJ_CLOSURE,  /**< Closure object */
-  OBJ_FUNCTION, /**< Lox function */
-  OBJ_INSTANCE,
-  OBJ_NATIVE,   /**< Native function */
-  OBJ_STRING,   /**< String object */
-  OBJ_UPVALUE   /**< Upvalue object */
+  OBJ_BOUND_METHOD, /**< "Bound method" function object */
+  OBJ_CLASS,        /**< Class object */
+  OBJ_CLOSURE,      /**< Closure object */
+  OBJ_FUNCTION,     /**< Lox function */
+  OBJ_INSTANCE,     /**< Class instance object */
+  OBJ_NATIVE,       /**< Native function */
+  OBJ_STRING,       /**< String object */
+  OBJ_UPVALUE       /**< Upvalue object */
 } ObjType;
 
 /**
@@ -161,23 +187,37 @@ typedef struct {
   uint16_t upvalueCount; /**< Number of upvalues captured by the closure */
 } ObjClosure;
 
+/**
+ * \struct ObjClass
+ * \brief Struct used to represent a class.
+ */
 typedef struct {
-  Obj obj;
-  ObjString* name;
-  Table methods;
-  Value initializer;
+  Obj obj;           /**< Obj field needed for "struct inheritance" */
+  ObjString* name;   /**< Name of the class */
+  Table methods;     /**< Hash table of the class' methods */
+  Value initializer; /**< Value used to cache the class' initializer */
 } ObjClass;
 
+/**
+ * \struct ObjInstance
+ * \brief Struct used to represent a class instance.
+ */
 typedef struct {
-  Obj obj;
-  ObjClass* class_;
-  Table fields;
+  Obj obj;          /**< Obj field needed for "struct inheritance" */
+  ObjClass* class_; /**< Pointer to the instance's class */
+  Table fields;     /**< Hash table of the instance's fields. Fields in Lox are
+                       associated with the instance, not with the class */
 } ObjInstance;
 
+/**
+ * \struct ObjBoundMethod
+ * \brief Struct used to represent a "bound method" object. A bound method is
+ * created when the user executes a method access and saves it in a variable.
+ */
 typedef struct {
-  Obj obj;
-  Value receiver;
-  ObjClosure* method;
+  Obj obj;            /**< Obj field needed for "struct inheritance" */
+  Value receiver;     /**< Class instance associated with this method */
+  ObjClosure* method; /**< Pointer to the method's closure */
 } ObjBoundMethod;
 
 /**
@@ -191,8 +231,23 @@ struct ObjString {
   uint32_t hash; /**< Hash code of the string, needed for use in hash tables */
 };
 
+/**
+ * \brief Creates an empty ObjBoundMethod object.
+ *
+ * \param receiver The method's receiver
+ * \param method Pointer to the method's closure
+ *
+ * \return Pointer to the created ObjBoundMethod
+ */
 ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 
+/**
+ * \brief Creates an empty ObjClass object.
+ *
+ * \param name Name of the class
+ *
+ * \return Pointer to the created ObjClass
+ */
 ObjClass* newClass(ObjString* name);
 
 /**
@@ -212,6 +267,13 @@ ObjClosure* newClosure(ObjFunction* function);
  */
 ObjFunction* newFunction();
 
+/**
+ * \brief Creates an empty ObjInstance object.
+ *
+ * \param class_ Pointer to the instance's class
+ *
+ * \return Pointer to the created ObjInstance
+ */
 ObjInstance* newInstance(ObjClass* class_);
 
 /**

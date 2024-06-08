@@ -59,6 +59,20 @@ static bool sqrtNative(const uint8_t argCount, Value* args) {
   return true;
 }
 
+/**
+ * \brief Implementation of the "hasProperty" native function.
+ *
+ * This function takes two arguments: an instance and a string. It then verifies
+ * if the instance has a property with the name specified in the string and
+ * returns a boolean value.
+ *
+ * \param argCount Number of arguments that were passed to the function
+ * \param args Pointer to the value stack, where the arguments reside. The value
+ * of args[-1] is set to the return value of the function, or to an error
+ * message if there were any errors.
+ *
+ * \return Boolean values that indicates if the function was successful.
+ */
 static bool hasPropertyNative(const uint8_t argCount, Value* args) {
   if (!IS_INSTANCE(args[0])) {
     args[-1] = OBJ_VAL(copyString("First argument must be an instance.", 35));
@@ -296,6 +310,15 @@ static bool callValue(const Value callee, const uint8_t argCount) {
   return false;
 }
 
+/**
+ * \brief Function used to get a class' method and then call it.
+ *
+ * \param class_ Pointer to the class' object
+ * \param name The method's name
+ * \param argCount The number of arguments that were passed to the method
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
 static bool invokeFromClass(ObjClass* class_, ObjString* name,
                             const uint8_t argCount) {
   Value method;
@@ -307,6 +330,15 @@ static bool invokeFromClass(ObjClass* class_, ObjString* name,
   return call(AS_CLOSURE(method), argCount);
 }
 
+/**
+ * \brief Function used to call a method's property. This property can either be
+ * a field or a class method.
+ *
+ * \param name The property's name
+ * \param argCount The number of arguments that were passed to the method
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
 static bool invoke(ObjString* name, const uint8_t argCount) {
   Value receiver = peek(argCount);
   if (!IS_INSTANCE(receiver)) {
@@ -325,6 +357,15 @@ static bool invoke(ObjString* name, const uint8_t argCount) {
   return invokeFromClass(instance->class_, name, argCount);
 }
 
+/**
+ * \brief Helper function which binds a class method to a new bound method
+ * object.
+ *
+ * \param class_ Pointer to the class' object
+ * \param name The method's name
+ *
+ * \return Boolean value that indicates if the bind was successful.
+ */
 static bool bindMethod(const ObjClass* class_, const ObjString* name) {
   Value method;
   if (!tableGet(&class_->methods, name, &method)) {
@@ -499,6 +540,14 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that gets the value of an instance's property. A
+ * property can be either a field or a class method.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool getProperty(const uint32_t nameOffset) {
   if (!IS_INSTANCE(peek(0))) {
     runtimeError("Only instances have properties");
@@ -522,6 +571,14 @@ static bool getProperty(const uint32_t nameOffset) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that sets the value of an instance's property. Only
+ * fields can be set, but they can shadow class methods.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool setProperty(const uint32_t nameOffset) {
   if (!IS_INSTANCE(peek(1))) {
     runtimeError("Only instances have fields.");
@@ -538,6 +595,15 @@ static bool setProperty(const uint32_t nameOffset) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function which loads a method which is being
+ * accessed using "super". The method is then added to a new bound method
+ * object.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool getSuper(const ObjString* name) {
   ObjClass* superclass = AS_CLASS(pop());
 
@@ -608,9 +674,12 @@ static InterpretResult run() {
 #define READ_CONSTANT_LONG()                                                   \
   (frame->closure->function->chunk.constants.values[READ_LONG_OPERAND()])
 
+// Read the name of a variable in the globals array using an 8-bit offset
 #define READ_GLOBAL_NAME() vm.globalValues.vars[READ_BYTE()].identifier
 
-#define READ_GLOBAL_NAME_LONG() vm.globalValues.vars[READ_LONG_OPERAND()].identifier
+// Read the name of a variable in the globals array using a 24-bit offset
+#define READ_GLOBAL_NAME_LONG()                                                \
+  vm.globalValues.vars[READ_LONG_OPERAND()].identifier
 
 // Apply a binary operation based on the two next values at stack and on the
 // type of the operands
@@ -858,6 +927,7 @@ static InterpretResult run() {
       break;
     }
     case OP_INVOKE_LONG: {
+      // Code duplication. I should extract an auxiliary function in the future
       ObjString* method = READ_GLOBAL_NAME_LONG();
       uint8_t argCount = READ_BYTE();
 
@@ -883,6 +953,7 @@ static InterpretResult run() {
       break;
     }
     case OP_SUPER_INVOKE_LONG: {
+      // Code duplication. I should extract an auxiliary function in the future
       ObjString* method = READ_GLOBAL_NAME_LONG();
       uint8_t argCount = READ_BYTE();
       ObjClass* superclass = AS_CLASS(pop());
@@ -928,8 +999,7 @@ static InterpretResult run() {
       push(OBJ_VAL(newClass(READ_GLOBAL_NAME())));
       break;
     case OP_CLASS_LONG:
-      push(OBJ_VAL(
-          newClass(READ_GLOBAL_NAME_LONG())));
+      push(OBJ_VAL(newClass(READ_GLOBAL_NAME_LONG())));
       break;
     case OP_INHERIT: {
       Value superclass = peek(1);

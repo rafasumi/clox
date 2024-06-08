@@ -47,7 +47,8 @@ typedef struct {
   Table globalNames;      /**< Table of defined global identifiers */
   GlobalVarArray globalValues; /**< Array with values of global variables */
   Table strings; /**< Table of allocated strings, used for string interning */
-  ObjString* initString;
+  ObjString* initString; /**< ObjString used to represent "init". This is needed
+                            to take advantage of string interning  */
   ObjUpvalue* openUpvalues; /**< Pointer to the head of the linked-list of open
                                upvalues */
   size_t bytesAllocated; /**< Number of bytes of managed memory allocated by the
@@ -55,7 +56,7 @@ typedef struct {
   size_t nextGC;         /**< Threshold to trigger a garbage collection */
   Obj* objects; /**< Pointer to the head of the linked-list of heap-allocated
                    objects */
-  size_t grayCount; /**< Number of objects in the gray stack */
+  size_t grayCount;    /**< Number of objects in the gray stack */
   size_t grayCapacity; /**< Capacity of the gray stack */
   Obj** grayStack; /**< Stack of "gray" memory objects, meaning that they are
                       reachable in memory and may reference other objects */
