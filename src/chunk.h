@@ -42,10 +42,16 @@ typedef enum {
   OP_GET_UPVALUE,     /**< Loads a local variable through its upvalue */
   OP_SET_UPVALUE, /**< Updates the value of a local variable through its upvalue
                    */
-  OP_GET_PROPERTY,
-  OP_GET_PROPERTY_LONG,
-  OP_SET_PROPERTY,
-  OP_SET_PROPERTY_LONG,
+  OP_GET_PROPERTY, /**< Loads a property from a class instance using an 8-bit
+                      offset */
+  OP_GET_PROPERTY_LONG, /**< Loads a property from a class instance using a
+                           24-bit offset */
+  OP_SET_PROPERTY, /**< Sets the value of a property for a class instance using
+                      an 8-bit offset */
+  OP_SET_PROPERTY_LONG, /**< Sets the value of a property for a class instance
+                           using a 24-bit offset */
+  OP_GET_SUPER,      /**< Loads a method from "super" using an 8-bit offset */
+  OP_GET_SUPER_LONG, /**< Loads a method from "super" using a 24-bit offset */
   OP_NOT,    /**< Applies logical negation to the value at the top of the stack
               */
   OP_NEGATE, /**< Negates the value at the top of the stack */
@@ -71,8 +77,14 @@ typedef enum {
                        of the stack is false */
   OP_LOOP, /**< Unconditionally jumps to a previous instruction in the chunk */
   OP_CALL, /**< Invokes a function that is currently in the stack */
-  OP_INVOKE,
-  OP_INVOKE_LONG,
+  OP_INVOKE, /**< Superinstruction which loads a class method and invokes it.
+                Uses an 8-bit offset */
+  OP_INVOKE_LONG,  /**< Superinstruction which loads a class method and invokes
+                      it. Uses a 24-bit offset */
+  OP_SUPER_INVOKE, /**< Superinstruction which loads property from "super" and
+                      immediately invokes it. Uses an 8-bit offset */
+  OP_SUPER_INVOKE_LONG, /**< Superinstruction which loads property from "super" and
+                      immediately invokes it. Uses a 24-bit offset */
   OP_CLOSURE, /**< Defines a closure. It has a variable sized operand, which
                  depends on the number of upvalues */
   OP_CLOSURE_LONG,  /**< Defines a closure, while loading it with a 24-bit
@@ -81,10 +93,15 @@ typedef enum {
   OP_CLOSE_UPVALUE, /**< Closes all upvalues that appear after a certain point
                        in the stack */
   OP_RETURN,        /**< Returns from the current function */
-  OP_CLASS,
-  OP_CLASS_LONG,
-  OP_METHOD,
-  OP_METHOD_LONG,
+  OP_CLASS, /**< Creates a new class object and pushes it to the stack. Uses an
+               8-bit offset */
+  OP_CLASS_LONG, /**< Creates a new class object and pushes it to the stack.
+                    Uses a 24-bit offset */
+  OP_INHERIT,
+  OP_METHOD, /**< Adds a method to the method table of a class. Uses an 8-bit
+                offset  */
+  OP_METHOD_LONG, /**< Adds a method to the method table of a class. Uses a
+                     24-bit offset  */
 } OpCode;
 
 /**

@@ -100,10 +100,10 @@ typedef struct {
  * \brief Enum type for the different types of functions
  */
 typedef enum {
-  TYPE_FUNCTION, /**< Actual Lox Function */
-  TYPE_INITIALIZER,
-  TYPE_METHOD,
-  TYPE_SCRIPT /**< Top-level code, which is represented as a function */
+  TYPE_FUNCTION,    /**< Actual Lox Function */
+  TYPE_INITIALIZER, /**< Class initializer */
+  TYPE_METHOD,      /**< Class method */
+  TYPE_SCRIPT       /**< Top-level code, which is represented as a function */
 } FunctionType;
 
 /**
@@ -122,8 +122,14 @@ typedef struct Compiler {
   int32_t scopeDepth;            /**< Scope depth of the code being compiled */
 } Compiler;
 
+/**
+ * \struct ClassCompiler
+ * \brief Strucure which represents the current innermost class being compiled
+ */
 typedef struct ClassCompiler {
-  struct ClassCompiler* enclosing;
+  struct ClassCompiler* enclosing; /**< Pointer to the enclosing class   */
+  bool hasSuperclass; /**< Boolean value which indicates if the class has a
+                         superclass */
 } ClassCompiler;
 
 // --------- Module variables ---------
@@ -350,7 +356,9 @@ static void emitOffsetOperandInstruction(const uint8_t instruction,
 }
 
 /**
- * \brief Adds an OP_RETURN bytecode to the target chunk
+ * \brief Adds an OP_RETURN bytecode to the target chunk. If the current
+ * function is a class initializer, than an instruction to return the a class
+ * instance is added before the OP_RETURN.
  *
  */
 static void emitReturn() {
@@ -435,7 +443,8 @@ static void initCompiler(Compiler* compiler, const FunctionType type) {
         copyString(parser.previous.start, parser.previous.length);
   }
 
-  // Claim stack slot 0 for the VM's own internal use
+  // Claim stack slot 0 to store an instance to which "this" is bound to in
+  // class methods
   Local* local = &current->locals[current->localCount++];
   local->depth = 0;
 
@@ -1016,6 +1025,59 @@ static void variable(const bool canAssign) {
   namedVariable(parser.previous, canAssign);
 }
 
+/**
+ * \brief Helper function which creates a synthetic token for a given string.
+ *
+ * \param text Text which will be associated with token
+ *
+ */
+static Token syntheticToken(const char* text) {
+  Token token;
+  token.start = text;
+  token.length = strlen(text);
+  return token;
+}
+
+/**
+ * \brief Parses an expression which uses "super".
+ *
+ * \param canAssign Boolean flag that indicates if the identifier has already
+ * been defined
+ *
+ */
+static void super_(const bool canAssign) {
+  if (currentClass == NULL) {
+    error("Can't use 'super' outside of class.");
+  } else if (!currentClass->hasSuperclass) {
+    error("Can't use 'super' in a class with no superclass");
+  }
+
+  consume(TOKEN_DOT, "Expect '.' after 'super'.");
+  consume(TOKEN_IDENTIFIER, "Expect superclass method name.");
+
+  ConstFlag flag = (ConstFlag) true;
+  uint32_t nameOffset = identifierConstant(&parser.previous, &flag);
+
+  namedVariable(syntheticToken("this"), false);
+
+  if (match(TOKEN_LEFT_PAREN)) {
+    uint8_t argCount = argumentList();
+    namedVariable(syntheticToken("super"), false);
+    emitOffsetOperandInstruction(OP_SUPER_INVOKE, nameOffset);
+    emitByte(argCount);
+  } else {
+    namedVariable(syntheticToken("super"), false);
+    emitOffsetOperandInstruction(OP_GET_SUPER, nameOffset);
+  }
+}
+
+/**
+ * \brief Parses an expression which uses "this".
+ *
+ * \param canAssign Boolean flag that indicates if the identifier has already
+ * been defined
+ *
+ */
 static void this_(const bool canAssign) {
   if (currentClass == NULL) {
     error("Can't use 'this' outside of class.");
@@ -1025,6 +1087,13 @@ static void this_(const bool canAssign) {
   variable(false);
 }
 
+/**
+ * \brief Parses an expression which uses the . operator.
+ *
+ * \param canAssign Boolean flag that indicates if the identifier has already
+ * been defined
+ *
+ */
 static void dot(const bool canAssign) {
   consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
   ConstFlag flag = (ConstFlag) false;
@@ -1103,7 +1172,7 @@ ParseRule rules[] = {
     [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
-    [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
+    [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
     [TOKEN_THIS] = {this_, NULL, PREC_NONE},
     [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_VAR] = {NULL, NULL, PREC_NONE},
@@ -1270,6 +1339,10 @@ static void function(const FunctionType type) {
   }
 }
 
+/**
+ * \brief Helper function to parse the declaration of a class method.
+ *
+ */
 static void method() {
   consume(TOKEN_IDENTIFIER, "Expect method name.");
   ConstFlag flag = (ConstFlag) true;
@@ -1285,6 +1358,10 @@ static void method() {
   emitOffsetOperandInstruction(OP_METHOD, nameOffset);
 }
 
+/**
+ * \brief Parses the declaration of a class.
+ *
+ */
 static void classDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect class name.");
   Token className = parser.previous;
@@ -1296,8 +1373,25 @@ static void classDeclaration() {
   defineVariable(nameOffset);
 
   ClassCompiler classCompiler;
+  classCompiler.hasSuperclass = false;
   classCompiler.enclosing = currentClass;
   currentClass = &classCompiler;
+
+  if (match(TOKEN_LESS)) {
+    consume(TOKEN_IDENTIFIER, "Expect superclass name.");
+    variable(false);
+
+    if (identifiersEqual(&className, &parser.previous))
+      error("A class can't inherit from itself.");
+
+    beginScope();
+    addLocal(syntheticToken("super"), true);
+    defineVariable(0);
+
+    namedVariable(className, false);
+    emitByte(OP_INHERIT);
+    classCompiler.hasSuperclass = true;
+  }
 
   namedVariable(className, false);
   consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
@@ -1307,6 +1401,9 @@ static void classDeclaration() {
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
   emitByte(OP_POP);
+
+  if (classCompiler.hasSuperclass)
+    endScope();
 
   currentClass = currentClass->enclosing;
 }

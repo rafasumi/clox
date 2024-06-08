@@ -59,6 +59,20 @@ static bool sqrtNative(const uint8_t argCount, Value* args) {
   return true;
 }
 
+/**
+ * \brief Implementation of the "hasProperty" native function.
+ *
+ * This function takes two arguments: an instance and a string. It then verifies
+ * if the instance has a property with the name specified in the string and
+ * returns a boolean value.
+ *
+ * \param argCount Number of arguments that were passed to the function
+ * \param args Pointer to the value stack, where the arguments reside. The value
+ * of args[-1] is set to the return value of the function, or to an error
+ * message if there were any errors.
+ *
+ * \return Boolean values that indicates if the function was successful.
+ */
 static bool hasPropertyNative(const uint8_t argCount, Value* args) {
   if (!IS_INSTANCE(args[0])) {
     args[-1] = OBJ_VAL(copyString("First argument must be an instance.", 35));
@@ -268,8 +282,15 @@ static bool callValue(const Value callee, const uint8_t argCount) {
     case OBJ_CLASS: {
       ObjClass* class_ = AS_CLASS(callee);
       vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(class_));
+
+      Value superclassInit;
       if (!IS_UNDEFINED(class_->initializer)) {
+        // Uses the cached initializer
         return call(AS_CLOSURE(class_->initializer), argCount);
+      } else if (tableGet(&class_->methods, vm.initString, &superclassInit)) {
+        // Tries to use a superclass initializer if the init method is not
+        // defined
+        return call(AS_CLOSURE(superclassInit), argCount);
       } else if (argCount != 0) {
         runtimeError("Expected 0 arguments but got %d.", argCount);
         return false;
@@ -289,7 +310,17 @@ static bool callValue(const Value callee, const uint8_t argCount) {
   return false;
 }
 
-static bool invokeFromClass(ObjClass* class_, ObjString* name, const uint8_t argCount) {
+/**
+ * \brief Function used to get a class' method and then call it.
+ *
+ * \param class_ Pointer to the class' object
+ * \param name The method's name
+ * \param argCount The number of arguments that were passed to the method
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
+static bool invokeFromClass(ObjClass* class_, ObjString* name,
+                            const uint8_t argCount) {
   Value method;
   if (!tableGet(&class_->methods, name, &method)) {
     runtimeError("Undefined property '%s'.", name->chars);
@@ -299,6 +330,15 @@ static bool invokeFromClass(ObjClass* class_, ObjString* name, const uint8_t arg
   return call(AS_CLOSURE(method), argCount);
 }
 
+/**
+ * \brief Function used to call a method's property. This property can either be
+ * a field or a class method.
+ *
+ * \param name The property's name
+ * \param argCount The number of arguments that were passed to the method
+ *
+ * \return Boolean value that indicates if the call was successful.
+ */
 static bool invoke(ObjString* name, const uint8_t argCount) {
   Value receiver = peek(argCount);
   if (!IS_INSTANCE(receiver)) {
@@ -317,6 +357,15 @@ static bool invoke(ObjString* name, const uint8_t argCount) {
   return invokeFromClass(instance->class_, name, argCount);
 }
 
+/**
+ * \brief Helper function which binds a class method to a new bound method
+ * object.
+ *
+ * \param class_ Pointer to the class' object
+ * \param name The method's name
+ *
+ * \return Boolean value that indicates if the bind was successful.
+ */
 static bool bindMethod(const ObjClass* class_, const ObjString* name) {
   Value method;
   if (!tableGet(&class_->methods, name, &method)) {
@@ -491,6 +540,14 @@ static bool setGlobal(const uint32_t offset, CallFrame* frame, uint8_t* ip) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that gets the value of an instance's property. A
+ * property can be either a field or a class method.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool getProperty(const uint32_t nameOffset) {
   if (!IS_INSTANCE(peek(0))) {
     runtimeError("Only instances have properties");
@@ -514,6 +571,14 @@ static bool getProperty(const uint32_t nameOffset) {
   return true;
 }
 
+/**
+ * \brief Auxiliary function that sets the value of an instance's property. Only
+ * fields can be set, but they can shadow class methods.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
 static bool setProperty(const uint32_t nameOffset) {
   if (!IS_INSTANCE(peek(1))) {
     runtimeError("Only instances have fields.");
@@ -526,6 +591,25 @@ static bool setProperty(const uint32_t nameOffset) {
   Value value = pop();
   pop(); // Instance
   push(value);
+
+  return true;
+}
+
+/**
+ * \brief Auxiliary function which loads a method which is being
+ * accessed using "super". The method is then added to a new bound method
+ * object.
+ *
+ * \param nameOffset The offset of the property's name in the globalValues array
+ *
+ * \return Boolean value that indicates if there were any errors
+ */
+static bool getSuper(const ObjString* name) {
+  ObjClass* superclass = AS_CLASS(pop());
+
+  if (!bindMethod(superclass, name)) {
+    return false;
+  }
 
   return true;
 }
@@ -590,11 +674,12 @@ static InterpretResult run() {
 #define READ_CONSTANT_LONG()                                                   \
   (frame->closure->function->chunk.constants.values[READ_LONG_OPERAND()])
 
-// Read a string from the constants array with an 8-bit offset
-#define READ_STRING() AS_STRING(READ_CONSTANT())
+// Read the name of a variable in the globals array using an 8-bit offset
+#define READ_GLOBAL_NAME() vm.globalValues.vars[READ_BYTE()].identifier
 
-// Read a string from the constants array with a 24-bit offset
-#define READ_STRING_LONG() AS_STRING(READ_CONSTANT_LONG())
+// Read the name of a variable in the globals array using a 24-bit offset
+#define READ_GLOBAL_NAME_LONG()                                                \
+  vm.globalValues.vars[READ_LONG_OPERAND()].identifier
 
 // Apply a binary operation based on the two next values at stack and on the
 // type of the operands
@@ -721,6 +806,20 @@ static InterpretResult run() {
       if (!setProperty(READ_LONG_OPERAND()))
         return INTERPRET_RUNTIME_ERROR;
       break;
+    case OP_GET_SUPER: {
+      ObjString* name = READ_GLOBAL_NAME();
+      if (!getSuper(name)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      break;
+    }
+    case OP_GET_SUPER_LONG: {
+      ObjString* name = READ_GLOBAL_NAME_LONG();
+      if (!getSuper(name)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      break;
+    }
     case OP_NOT:
       vm.stackTop[-1] = BOOL_VAL(isFalsey(vm.stackTop[-1]));
       break;
@@ -817,7 +916,7 @@ static InterpretResult run() {
       break;
     }
     case OP_INVOKE: {
-      ObjString* method = vm.globalValues.vars[READ_BYTE()].identifier;
+      ObjString* method = READ_GLOBAL_NAME();
       uint8_t argCount = READ_BYTE();
 
       frame->ip = ip;
@@ -828,7 +927,8 @@ static InterpretResult run() {
       break;
     }
     case OP_INVOKE_LONG: {
-      ObjString* method = vm.globalValues.vars[READ_LONG_OPERAND()].identifier;
+      // Code duplication. I should extract an auxiliary function in the future
+      ObjString* method = READ_GLOBAL_NAME_LONG();
       uint8_t argCount = READ_BYTE();
 
       frame->ip = ip;
@@ -836,6 +936,35 @@ static InterpretResult run() {
         return INTERPRET_RUNTIME_ERROR;
       frame = &vm.frames[vm.frameCount - 1];
       ip = frame->ip;
+      break;
+    }
+    case OP_SUPER_INVOKE: {
+      ObjString* method = READ_GLOBAL_NAME();
+      uint8_t argCount = READ_BYTE();
+      ObjClass* superclass = AS_CLASS(pop());
+
+      frame->ip = ip;
+      if (!invokeFromClass(superclass, method, argCount)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+
+      break;
+    }
+    case OP_SUPER_INVOKE_LONG: {
+      // Code duplication. I should extract an auxiliary function in the future
+      ObjString* method = READ_GLOBAL_NAME_LONG();
+      uint8_t argCount = READ_BYTE();
+      ObjClass* superclass = AS_CLASS(pop());
+
+      frame->ip = ip;
+      if (!invokeFromClass(superclass, method, argCount)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      frame = &vm.frames[vm.frameCount - 1];
+      ip = frame->ip;
+
       break;
     }
     case OP_CLOSURE:
@@ -867,17 +996,28 @@ static InterpretResult run() {
       break;
     }
     case OP_CLASS:
-      push(OBJ_VAL(newClass(vm.globalValues.vars[READ_BYTE()].identifier)));
+      push(OBJ_VAL(newClass(READ_GLOBAL_NAME())));
       break;
     case OP_CLASS_LONG:
-      push(OBJ_VAL(
-          newClass(vm.globalValues.vars[READ_LONG_OPERAND()].identifier)));
+      push(OBJ_VAL(newClass(READ_GLOBAL_NAME_LONG())));
       break;
+    case OP_INHERIT: {
+      Value superclass = peek(1);
+      if (!IS_CLASS(superclass)) {
+        runtimeError("Superclass must be a class.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      ObjClass* subclass = AS_CLASS(peek(0));
+      tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
+      pop();
+      break;
+    }
     case OP_METHOD:
-      defineMethod(vm.globalValues.vars[READ_BYTE()].identifier);
+      defineMethod(READ_GLOBAL_NAME());
       break;
     case OP_METHOD_LONG:
-      defineMethod(vm.globalValues.vars[READ_LONG_OPERAND()].identifier);
+      defineMethod(READ_GLOBAL_NAME_LONG());
       break;
     default:
       break;
@@ -889,8 +1029,8 @@ static InterpretResult run() {
 #undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_CONSTANT_LONG
-#undef READ_STRING
-#undef READ_STRING_LONG
+#undef READ_GLOBAL_NAME
+#undef READ_GLOBAL_NAME_LONG
 #undef BINARY_OP
 }
 
