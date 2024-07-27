@@ -7,7 +7,7 @@ SOURCE_DIR := ./src
 NAME := clox
 
 CC := gcc
-CFLAGS := -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sequence-point
+CFLAGS := -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-sequence-point -DNAN_BOXING
 
 # If we're building at a point in the middle of a chapter, don't fail if there
 # are functions that aren't used yet.
