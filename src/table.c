@@ -39,7 +39,8 @@ void freeTable(Table* table) {
  */
 static Entry* findEntry(Entry* entries, const size_t capacity,
                         const ObjString* key) {
-  uint32_t index = key->hash % capacity;
+  // Equivalent to hash % capacity
+  uint32_t index = key->hash & (capacity - 1);
   Entry* tombstone = NULL;
 
   while (true) {
@@ -57,7 +58,7 @@ static Entry* findEntry(Entry* entries, const size_t capacity,
       return entry;
     }
 
-    index = (index + 1) % capacity;
+    index = (index + 1) & (capacity - 1);
   }
 }
 
